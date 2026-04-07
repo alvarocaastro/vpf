@@ -3,13 +3,16 @@ Application script for running Variable Pitch Fan analysis.
 
 This script orchestrates the VPF analysis stage, computing optimal incidence
 angles and pitch adjustments from previous aerodynamic simulation results.
+
+Colours and rcParams are inherited from figure_generator (imported at module
+level) so that all VPF figures are visually consistent with the core plots.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +20,8 @@ import pandas as pd
 
 from vfp_analysis import config as base_config
 from vfp_analysis.config_loader import get_output_dirs
-from vfp_analysis.postprocessing.figure_generator import _apply_plot_style
+# Import shared palette — this also triggers the rcParams update in figure_generator
+from vfp_analysis.postprocessing.figure_generator import SECTION_COLORS
 from vfp_analysis.vpf_analysis.adapters.filesystem.data_loader_adapter import (
     FilesystemDataLoader,
 )
@@ -36,12 +40,6 @@ from vfp_analysis.vpf_analysis.core.services.summary_generator_service import (
 
 LOGGER = logging.getLogger(__name__)
 
-# Canonical colors for each blade section — consistent across all VPF figures.
-_SECTION_COLORS: Dict[str, str] = {
-    "root": "#1f77b4",     # blue
-    "mid_span": "#ff7f0e", # orange
-    "tip": "#2ca02c",      # green
-}
 _SECTIONS: List[str] = ["root", "mid_span", "tip"]
 
 
@@ -67,43 +65,32 @@ def _plot_grouped_bars(
     sections: List[str],
     zero_line: bool = False,
 ) -> None:
-    """Render grouped bar chart on *ax* and optionally add a zero reference line.
-
-    Parameters
-    ----------
-    ax:
-        Target axes.
-    data:
-        Nested ``{condition: {section: value}}`` mapping.
-    conditions:
-        Ordered list of flight conditions (x-axis groups).
-    sections:
-        Ordered list of blade sections (bars within each group).
-    zero_line:
-        When True, draw a dashed horizontal line at y = 0.
-    """
-    x = np.arange(len(conditions))
-    width = 0.25
+    """Render grouped bar chart on *ax* using the shared section colour palette."""
+    x     = np.arange(len(conditions))
+    width = 0.22
 
     for i, section in enumerate(sections):
         values = [data.get(cond, {}).get(section, np.nan) for cond in conditions]
-        bars = ax.bar(
+        color  = SECTION_COLORS[section]
+        bars   = ax.bar(
             x + i * width,
             values,
             width,
             label=section.replace("_", " ").title(),
-            color=_SECTION_COLORS[section],
+            color=color,
+            edgecolor="white",
+            linewidth=0.6,
+            zorder=3,
         )
-        ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8)
+        ax.bar_label(bars, fmt="%.2f°", padding=3, fontsize=8)
 
     if zero_line:
-        ax.axhline(0, color="black", linestyle="--", linewidth=0.8)
+        ax.axhline(0, color="0.35", linestyle="--", linewidth=0.9)
 
     n_sections = len(sections)
     ax.set_xticks(x + width * (n_sections - 1) / 2)
     ax.set_xticklabels([c.title() for c in conditions])
-    ax.legend()
-    _apply_plot_style(ax)
+    ax.legend(loc="lower right")
 
 
 # ---------------------------------------------------------------------------
@@ -127,35 +114,31 @@ def generate_vpf_figures(
 
 def _plot_alpha_opt_vs_condition(optimal_incidences: list, figures_dir: Path) -> None:
     """Plot optimal angle of attack per flight condition, grouped by blade section."""
-    data = _build_condition_section_table(optimal_incidences, "alpha_opt")
+    data       = _build_condition_section_table(optimal_incidences, "alpha_opt")
     conditions = sorted(data.keys())
 
-    fig, ax = plt.subplots(figsize=(7.0, 5.0))
+    fig, ax = plt.subplots(figsize=(7.5, 5.0))
     _plot_grouped_bars(ax, data, conditions, _SECTIONS)
-    ax.set_xlabel("Flight Condition", fontsize=12)
-    ax.set_ylabel(r"$\alpha_{opt}$ [deg]", fontsize=12)
-    ax.set_title("Optimal Angle of Attack by Flight Condition", fontsize=14)
+    ax.set_xlabel("Flight Condition")
+    ax.set_ylabel(r"Optimal angle of attack $\alpha_{opt}$ [°]")
+    ax.set_title("Optimal Angle of Attack by Flight Condition", pad=8)
     fig.tight_layout()
-    fig.savefig(
-        figures_dir / "vpf_alpha_opt_vs_condition.png", dpi=300, bbox_inches="tight"
-    )
+    fig.savefig(figures_dir / "vpf_alpha_opt_vs_condition.png")
     plt.close(fig)
 
 
 def _plot_pitch_adjustment(pitch_adjustments: list, figures_dir: Path) -> None:
     """Plot required pitch adjustment relative to cruise per condition."""
-    data = _build_condition_section_table(pitch_adjustments, "delta_pitch")
+    data       = _build_condition_section_table(pitch_adjustments, "delta_pitch")
     conditions = sorted(data.keys())
 
-    fig, ax = plt.subplots(figsize=(7.0, 5.0))
+    fig, ax = plt.subplots(figsize=(7.5, 5.0))
     _plot_grouped_bars(ax, data, conditions, _SECTIONS, zero_line=True)
-    ax.set_xlabel("Flight Condition", fontsize=12)
-    ax.set_ylabel(r"$\Delta$ Pitch [deg]", fontsize=12)
-    ax.set_title("Required Pitch Adjustment Relative to Cruise", fontsize=14)
+    ax.set_xlabel("Flight Condition")
+    ax.set_ylabel(r"Required pitch adjustment $\Delta\alpha$ [°]")
+    ax.set_title("Required Pitch Adjustment Relative to Cruise", pad=8)
     fig.tight_layout()
-    fig.savefig(
-        figures_dir / "vpf_pitch_adjustment.png", dpi=300, bbox_inches="tight"
-    )
+    fig.savefig(figures_dir / "vpf_pitch_adjustment.png")
     plt.close(fig)
 
 
@@ -171,7 +154,7 @@ def _plot_efficiency_curves_with_optimum(
     }
 
     # Determine efficiency column (prefer CL_CD, fallback to ld)
-    eff_col: Optional[str] = None
+    eff_col: str | None = None
     for candidate in ("CL_CD", "ld"):
         if candidate in df_polars.columns:
             eff_col = candidate
@@ -184,48 +167,44 @@ def _plot_efficiency_curves_with_optimum(
     for condition in df_polars["condition"].unique():
         df_cond = df_polars[df_polars["condition"] == condition]
 
-        fig, ax = plt.subplots(figsize=(7.0, 5.0))
+        fig, ax = plt.subplots(figsize=(7.5, 5.0))
 
         for section in _SECTIONS:
             df_section = df_cond[df_cond["section"] == section]
             if df_section.empty:
                 continue
 
+            color = SECTION_COLORS[section]
             ax.plot(
                 df_section["alpha"],
                 df_section[eff_col],
+                color=color,
                 label=section.replace("_", " ").title(),
-                linewidth=1.6,
-                color=_SECTION_COLORS[section],
+                zorder=3,
             )
 
             key = (condition, section)
             if key in opt_lookup:
                 alpha_opt, eff_max = opt_lookup[key]
                 ax.plot(
-                    alpha_opt,
-                    eff_max,
-                    marker="X",
-                    color="red",
-                    markersize=10,
-                    markeredgecolor="darkred",
-                    markeredgewidth=1.5,
+                    alpha_opt, eff_max,
+                    marker="*",
+                    color=color,
+                    markersize=12,
+                    markeredgecolor="white",
+                    markeredgewidth=0.6,
                     zorder=5,
+                    linestyle="none",
                 )
 
-        ax.set_xlabel(r"$\alpha$ [deg]", fontsize=12)
-        ax.set_ylabel(r"$C_L/C_D$", fontsize=12)
+        ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
+        ax.set_ylabel(r"Lift-to-drag ratio $C_L/C_D$ [–]")
         ax.set_title(
-            f"Efficiency Curves with Optimal Points – {condition.title()}", fontsize=14
+            f"Efficiency Curves with Optimal Points — {condition.title()}", pad=8
         )
-        ax.legend()
-        _apply_plot_style(ax)
+        ax.legend(loc="lower right")
         fig.tight_layout()
-        fig.savefig(
-            figures_dir / f"vpf_efficiency_curves_{condition}.png",
-            dpi=300,
-            bbox_inches="tight",
-        )
+        fig.savefig(figures_dir / f"vpf_efficiency_curves_{condition}.png")
         plt.close(fig)
 
 
@@ -238,23 +217,26 @@ def _plot_section_comparison(optimal_incidences: list, figures_dir: Path) -> Non
     for inc in optimal_incidences:
         by_section.setdefault(inc.section, {})[inc.condition] = inc.alpha_opt
 
-    fig, ax = plt.subplots(figsize=(7.0, 5.0))
-    x = np.arange(len(_SECTIONS))
-    width = 0.2
+    fig, ax = plt.subplots(figsize=(7.5, 5.0))
+    x     = np.arange(len(_SECTIONS))
+    width = 0.18
 
+    cond_colors = ["#E31A1C", "#FF7F00", "#1F78B4", "#6A3D9A"]
     for i, condition in enumerate(conditions):
         values = [by_section.get(section, {}).get(condition, np.nan) for section in _SECTIONS]
-        ax.bar(x + i * width, values, width, label=condition.title())
+        color  = cond_colors[i % len(cond_colors)]
+        bars   = ax.bar(x + i * width, values, width, label=condition.title(),
+                        color=color, edgecolor="white", linewidth=0.6, zorder=3)
+        ax.bar_label(bars, fmt="%.1f°", padding=3, fontsize=7)
 
-    ax.set_xlabel("Blade Section", fontsize=12)
-    ax.set_ylabel(r"$\alpha_{opt}$ [deg]", fontsize=12)
-    ax.set_title("Optimal Angle of Attack by Blade Section", fontsize=14)
+    ax.set_xlabel("Blade Section")
+    ax.set_ylabel(r"Optimal angle of attack $\alpha_{opt}$ [°]")
+    ax.set_title("Optimal Angle of Attack by Blade Section", pad=8)
     ax.set_xticks(x + width * (len(conditions) - 1) / 2)
     ax.set_xticklabels([s.replace("_", " ").title() for s in _SECTIONS])
-    ax.legend()
-    _apply_plot_style(ax)
+    ax.legend(loc="lower right")
     fig.tight_layout()
-    fig.savefig(figures_dir / "vpf_section_comparison.png", dpi=300, bbox_inches="tight")
+    fig.savefig(figures_dir / "vpf_section_comparison.png")
     plt.close(fig)
 
 
@@ -268,18 +250,18 @@ def run_vpf_analysis() -> None:
     LOGGER.info("STAGE 6: Variable Pitch Fan Aerodynamic Analysis")
     LOGGER.info("=" * 70)
 
-    output_dirs = get_output_dirs()
-    polars_dir = output_dirs["polars"]
+    output_dirs      = get_output_dirs()
+    polars_dir       = output_dirs["polars"]
     compressibility_dir = output_dirs["compressibility"]
-    tables_dir = output_dirs["tables"]
-    figures_vpf_dir = output_dirs["figures_vpf"]
-    stage6_dir = base_config.RESULTS_DIR / "stage_6"
+    tables_dir       = output_dirs["tables"]
+    figures_vpf_dir  = output_dirs["figures_vpf"]
+    stage6_dir       = base_config.RESULTS_DIR / "stage_6"
     stage6_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Load data
     LOGGER.info("Loading aerodynamic data...")
-    loader = FilesystemDataLoader()
-    df_polars = loader.load_polar_data(polars_dir)
+    loader     = FilesystemDataLoader()
+    df_polars  = loader.load_polar_data(polars_dir)
     df_corrected = loader.load_compressibility_data(compressibility_dir)
 
     if df_polars.empty:
@@ -297,14 +279,16 @@ def run_vpf_analysis() -> None:
 
     # Step 3: Compute pitch adjustments
     LOGGER.info("Computing pitch adjustments relative to cruise...")
-    pitch_adjustments = compute_pitch_adjustments(optimal_incidences, reference_condition="cruise")
+    pitch_adjustments = compute_pitch_adjustments(
+        optimal_incidences, reference_condition="cruise"
+    )
     LOGGER.info("Computed pitch adjustments for %d cases", len(pitch_adjustments))
 
     # Step 4: Generate figures
     LOGGER.info("Generating VPF analysis figures...")
     generate_vpf_figures(optimal_incidences, pitch_adjustments, df_polars, figures_vpf_dir)
 
-    # Step 5: Write results
+    # Step 5: Write results tables
     LOGGER.info("Writing analysis results...")
     writer = FilesystemVpfResultsWriter()
     writer.write_optimal_pitch_table(
@@ -314,26 +298,22 @@ def run_vpf_analysis() -> None:
         pitch_adjustments, tables_dir / "vpf_pitch_adjustment.csv"
     )
 
-    # Generate and write VPF-specific summary
+    # Step 6: Write summaries
     vpf_summary = generate_analysis_summary(optimal_incidences, pitch_adjustments)
     writer.write_analysis_summary(vpf_summary, output_dirs["vpf_analysis_summary"])
 
-    # Generate and write Stage 6 summary
     from vfp_analysis.postprocessing.stage_summary_generator import (
         generate_stage6_summary,
         write_stage_summary,
     )
-
     stage6_summary = generate_stage6_summary(stage6_dir)
     write_stage_summary(6, stage6_summary, stage6_dir)
     LOGGER.info("Stage 6 summary written to: %s", stage6_dir / "finalresults_stage6.txt")
 
     LOGGER.info("=" * 70)
-    LOGGER.info("Stage 6 completed successfully!")
-    LOGGER.info("Results saved in:")
-    LOGGER.info("  - Tables:  %s", tables_dir)
-    LOGGER.info("  - Figures: %s", figures_vpf_dir)
-    LOGGER.info("  - Summary: %s", output_dirs["vpf_analysis_summary"])
+    LOGGER.info("Stage 6 completed successfully.")
+    LOGGER.info("  Tables:  %s", tables_dir)
+    LOGGER.info("  Figures: %s", figures_vpf_dir)
     LOGGER.info("=" * 70)
 
 

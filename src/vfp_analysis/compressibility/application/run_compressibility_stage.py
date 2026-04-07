@@ -144,7 +144,7 @@ def _generate_global_plots(
     ax.set_ylabel(r"$C_L/C_D$ corregido")
     ax.set_title("Eficiencia corregida $C_L/C_D$ por condición de vuelo")
     ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
-    ax.legend(loc="best")
+    ax.legend(loc="lower right")
     fig.tight_layout()
     fig.savefig(
         output_dir / "corrected_efficiency_all_flights.png",

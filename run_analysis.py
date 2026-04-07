@@ -78,10 +78,7 @@ from vfp_analysis.postprocessing.stage_summary_generator import (
     write_stage_summary,
 )
 from vfp_analysis.postprocessing.table_generator import (
-    export_alpha_opt_table,
-    export_alpha_opt_second_peak,
     export_clcd_max_table,
-    export_efficiency_table,
     export_summary_table,
 )
 from vfp_analysis.vpf_analysis.application.run_vpf_analysis import run_vpf_analysis
@@ -319,11 +316,10 @@ def step_6_export_tables(metrics: list) -> None:
     output_dirs = get_output_dirs()
     tables_dir = output_dirs["tables"]
 
-    export_efficiency_table(metrics, tables_dir / "efficiency_by_condition.csv")
-    export_alpha_opt_table(metrics, tables_dir / "alpha_opt_by_condition.csv")
-    export_alpha_opt_second_peak(metrics, tables_dir / "alpha_opt_second_peak.csv")
-    export_clcd_max_table(metrics, tables_dir / "clcd_max_by_section.csv")
+    # summary_table.csv — comprehensive table with all metrics
     export_summary_table(metrics, tables_dir / "summary_table.csv")
+    # clcd_max_by_section.csv — CL, CD at optimum (complementary detail)
+    export_clcd_max_table(metrics, tables_dir / "clcd_max_by_section.csv")
 
     LOGGER.info(f"Tables exported to: {tables_dir}")
 
@@ -365,7 +361,7 @@ def step_8_vpf_analysis() -> None:
 def step_9_sfc_analysis() -> None:
     """Step 9: Specific Fuel Consumption Impact analysis."""
     LOGGER.info("=" * 60)
-    LOGGER.info("STEP 10: Specific Fuel Consumption (SFC) Impact Analysis")
+    LOGGER.info("STEP 9: Specific Fuel Consumption (SFC) Impact Analysis")
     LOGGER.info("=" * 60)
 
     run_sfc_analysis()

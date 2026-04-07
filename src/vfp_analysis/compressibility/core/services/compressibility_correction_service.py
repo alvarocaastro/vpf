@@ -129,7 +129,7 @@ class CompressibilityCorrectionService:
         ax1.set_ylabel(r"$C_L$")
         ax1.set_title(f"$C_L$ vs $\\alpha$ – {case.flight_condition}")
         ax1.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
-        ax1.legend(loc="best")
+        ax1.legend(loc="lower right")
 
         # Plot 2: CL/CD vs alpha
         ax2 = axes[1]
@@ -151,7 +151,7 @@ class CompressibilityCorrectionService:
         ax2.set_ylabel(r"$C_L/C_D$")
         ax2.set_title(f"Eficiencia $C_L/C_D$ vs $\\alpha$ – {case.flight_condition}")
         ax2.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
-        ax2.legend(loc="best")
+        ax2.legend(loc="lower right")
 
         fig.tight_layout()
         fig.savefig(output_path, dpi=300, bbox_inches="tight")

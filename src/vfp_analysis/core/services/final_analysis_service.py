@@ -205,28 +205,14 @@ class FinalAnalysisService:
                 alpha=0.7,
                 zorder=4,
             )
-            ax_eff.annotate(
-                f"$\\alpha_{{eff}}$ = {alpha_eff:.2f}°\n(2nd peak)",
-                xy=(alpha_eff, ld_eff),
-                xytext=(alpha_eff + 1.0, ld_eff + 5.0),
-                arrowprops=dict(
-                    facecolor="red",
-                    shrink=0.05,
-                    width=1.5,
-                    headwidth=8,
-                    alpha=0.7,
-                ),
-                fontsize=9,
-                fontweight="bold",
-                zorder=6,
-            )
+
         ax_eff.set_xlabel(r"$\alpha$ [deg]")
         ax_eff.set_ylabel(r"$C_L/C_D$")
         ax_eff.set_title(
             f"Eficiencia aerodinámica $C_L/C_D$ – {cfg.flight_name} / {cfg.section.name}"
         )
         ax_eff.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
-        ax_eff.legend(loc="best")
+        ax_eff.legend(loc="lower right")
         fig_eff.tight_layout()
         fig_eff.savefig(out_dir / "efficiency_plot.png", dpi=300, bbox_inches="tight")
         plt.close(fig_eff)

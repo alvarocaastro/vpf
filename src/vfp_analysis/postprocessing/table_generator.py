@@ -2,6 +2,10 @@
 Table generation for thesis export.
 
 This module generates CSV tables ready for LaTeX import.
+
+Two tables are produced — all others were subsets of summary_table:
+  - summary_table.csv       — comprehensive: Re, Ncrit, (CL/CD)_max, alpha_opt, CL_max
+  - clcd_max_by_section.csv — adds CL_at_opt and CD_at_opt (not in summary)
 """
 
 from __future__ import annotations
@@ -12,105 +16,6 @@ from typing import List
 import pandas as pd
 
 from vfp_analysis.postprocessing.metrics import AerodynamicMetrics
-
-
-def export_efficiency_table(
-    metrics: List[AerodynamicMetrics],
-    output_path: Path,
-) -> None:
-    """
-    Export efficiency by condition table.
-
-    Parameters
-    ----------
-    metrics : List[AerodynamicMetrics]
-        List of computed metrics.
-    output_path : Path
-        Output CSV file path.
-    """
-    rows = []
-    for m in metrics:
-        rows.append(
-            {
-                "flight_condition": m.flight_condition,
-                "blade_section": m.blade_section,
-                "reynolds": m.reynolds,
-                "ncrit": m.ncrit,
-                "max_efficiency": m.max_efficiency,
-                "alpha_opt_deg": m.alpha_opt,
-            }
-        )
-
-    df = pd.DataFrame(rows)
-    df = df.sort_values(["flight_condition", "blade_section"])
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False, float_format="%.6f")
-
-
-def export_alpha_opt_table(
-    metrics: List[AerodynamicMetrics],
-    output_path: Path,
-) -> None:
-    """
-    Export optimal angle of attack by condition table.
-
-    Parameters
-    ----------
-    metrics : List[AerodynamicMetrics]
-        List of computed metrics.
-    output_path : Path
-        Output CSV file path.
-    """
-    rows = []
-    for m in metrics:
-        rows.append(
-            {
-                "flight_condition": m.flight_condition,
-                "blade_section": m.blade_section,
-                "alpha_opt_deg": m.alpha_opt,
-                "max_efficiency": m.max_efficiency,
-            }
-        )
-
-    df = pd.DataFrame(rows)
-    df = df.sort_values(["flight_condition", "blade_section"])
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False, float_format="%.6f")
-
-
-def export_clcd_max_table(
-    metrics: List[AerodynamicMetrics],
-    output_path: Path,
-) -> None:
-    """
-    Export maximum CL/CD by section table.
-
-    Parameters
-    ----------
-    metrics : List[AerodynamicMetrics]
-        List of computed metrics.
-    output_path : Path
-        Output CSV file path.
-    """
-    rows = []
-    for m in metrics:
-        rows.append(
-            {
-                "flight_condition": m.flight_condition,
-                "blade_section": m.blade_section,
-                "clcd_max": m.max_efficiency,
-                "cl_at_opt": m.cl_at_opt,
-                "cd_at_opt": m.cd_at_opt,
-            }
-        )
-
-    df = pd.DataFrame(rows)
-    df = df.sort_values(["flight_condition", "blade_section"])
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False, float_format="%.6f")
 
 
 def export_summary_table(
@@ -150,22 +55,21 @@ def export_summary_table(
     df.to_csv(output_path, index=False, float_format="%.6f")
 
 
-def export_alpha_opt_second_peak(
+def export_clcd_max_table(
     metrics: List[AerodynamicMetrics],
     output_path: Path,
 ) -> None:
     """
-    Export optimal angle of attack from second efficiency peak.
+    Export maximum CL/CD by section table, including CL and CD at optimum.
 
-    This table specifically focuses on the second CL/CD peak (alpha >= 3°),
-    which represents the relevant operating point for turbomachinery blades.
-    The first peak at low alpha is an artifact of laminar separation bubble
-    effects and is not representative of real fan blade operation.
+    This table complements summary_table by making the CL/CD operating
+    point explicit (CL_at_opt, CD_at_opt), which is useful for verifying
+    the actual lift-to-drag working point per section.
 
     Parameters
     ----------
     metrics : List[AerodynamicMetrics]
-        List of computed metrics (already using second peak).
+        List of computed metrics.
     output_path : Path
         Output CSV file path.
     """
@@ -173,16 +77,17 @@ def export_alpha_opt_second_peak(
     for m in metrics:
         rows.append(
             {
-                "condition": m.flight_condition,
-                "section": m.blade_section,
-                "Re": m.reynolds,
-                "alpha_opt": m.alpha_opt,
-                "CL_CD_max": m.max_efficiency,
+                "flight_condition": m.flight_condition,
+                "blade_section": m.blade_section,
+                "clcd_max": m.max_efficiency,
+                "alpha_opt_deg": m.alpha_opt,
+                "cl_at_opt": m.cl_at_opt,
+                "cd_at_opt": m.cd_at_opt,
             }
         )
 
     df = pd.DataFrame(rows)
-    df = df.sort_values(["condition", "section"])
+    df = df.sort_values(["flight_condition", "blade_section"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False, float_format="%.6f")
