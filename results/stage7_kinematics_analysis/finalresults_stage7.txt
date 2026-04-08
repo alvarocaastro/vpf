@@ -1,6 +1,0 @@
-Kinematics Analysis solves velocity triangles (V_ax, U) to compute actual mechanical pitch.
-delta_beta_mech = delta_alpha_aero + delta_phi
-
-Cases solved: 12
-Tables output: C:\Users\Alvaro\Desktop\vpf\vpf\results\stage7_kinematics_analysis\tables\kinematics_analysis.csv
-Figures output: C:\Users\Alvaro\Desktop\vpf\vpf\results\stage7_kinematics_analysis\figures
