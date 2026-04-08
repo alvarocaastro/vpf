@@ -1,0 +1,14 @@
+======================================================================
+STAGE 1: AIRFOIL SELECTION
+Generated: 2026-04-08 19:40:07
+======================================================================
+
+Selected airfoil : NACA 0012
+Alpha range      : -5.0° → 20.0° (step 0.15°)
+Reference Re     : 3.00e+06  |  Ncrit: 7.0
+Scoring criteria : (CL/CD)_max (w=1.0)  +  α_stall·5 (w=5.0)  −  C̄_D·5000 (w=5000)
+
+Outputs:
+  C:\Users\Alvaro\Desktop\vpf\vpf\results\stage1_airfoil_selection\airfoil_selection
+
+======================================================================

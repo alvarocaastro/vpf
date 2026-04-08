@@ -216,7 +216,7 @@ def generate_stage5_summary(stage_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def generate_stage6_summary(stage_dir: Path) -> str:
-    tables_dir = stage_dir.parent / "stage_4" / "tables"
+    tables_dir = stage_dir / "tables"
     figures_dir = stage_dir / "figures"
 
     lines = _header(6, "VARIABLE PITCH FAN (VPF) ANALYSIS")

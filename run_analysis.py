@@ -29,13 +29,13 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from vfp_analysis import config as base_config
 from vfp_analysis.adapters.xfoil.xfoil_runner_adapter import XfoilRunnerAdapter
-from vfp_analysis.compressibility.adapters.correction_models.prandtl_glauert_model import (
+from vfp_analysis.stage3_compressibility_correction.adapters.correction_models.prandtl_glauert_model import (
     PrandtlGlauertModel,
 )
-from vfp_analysis.compressibility.core.domain.compressibility_case import (
+from vfp_analysis.stage3_compressibility_correction.core.domain.compressibility_case import (
     CompressibilityCase,
 )
-from vfp_analysis.compressibility.core.services.compressibility_correction_service import (
+from vfp_analysis.stage3_compressibility_correction.core.services.compressibility_correction_service import (
     CompressibilityCorrectionService,
 )
 from vfp_analysis.config_loader import (
@@ -53,16 +53,16 @@ from vfp_analysis.config_loader import (
 from vfp_analysis.core.domain.airfoil import Airfoil
 from vfp_analysis.core.domain.blade_section import BladeSection
 from vfp_analysis.core.domain.simulation_condition import SimulationCondition
-from vfp_analysis.core.services.airfoil_selection_service import (
+from vfp_analysis.stage1_airfoil_selection.airfoil_selection_service import (
     AirfoilSelectionService,
 )
-from vfp_analysis.core.services.final_analysis_service import (
+from vfp_analysis.stage2_xfoil_simulations.final_analysis_service import (
     FinalAnalysisService,
     FinalSimulationConfig,
 )
-from vfp_analysis.postprocessing.figure_generator import generate_all_figures
-from vfp_analysis.postprocessing.metrics import compute_all_metrics
-from vfp_analysis.postprocessing.polar_organizer import organize_polars
+from vfp_analysis.stage5_publication_figures.figure_generator import generate_all_figures
+from vfp_analysis.stage4_performance_metrics.metrics import compute_all_metrics
+from vfp_analysis.stage2_xfoil_simulations.polar_organizer import organize_polars
 from vfp_analysis.postprocessing.stage_summary_generator import (
     generate_stage1_summary,
     generate_stage2_summary,
@@ -73,13 +73,13 @@ from vfp_analysis.postprocessing.stage_summary_generator import (
     generate_stage7_summary,
     write_stage_summary,
 )
-from vfp_analysis.postprocessing.table_generator import (
+from vfp_analysis.stage4_performance_metrics.table_generator import (
     export_clcd_max_table,
     export_summary_table,
 )
-from vfp_analysis.vpf_analysis.application.run_vpf_analysis import run_vpf_analysis
-from vfp_analysis.kinematics_analysis.application.run_kinematics_stage import run_kinematics_stage
-from vfp_analysis.sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
+from vfp_analysis.stage6_vpf_analysis.application.run_vpf_analysis import run_vpf_analysis
+from vfp_analysis.stage7_kinematics_analysis.application.run_kinematics_stage import run_kinematics_stage
+from vfp_analysis.stage8_sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
 
 # Configure logging
 logging.basicConfig(
@@ -98,8 +98,8 @@ def step_1_clean_results() -> None:
     LOGGER.info("=" * 60)
 
     # Clean all stage directories (stages 1–8)
-    for stage_num in range(1, 9):
-        stage_dir = base_config.RESULTS_DIR / f"stage_{stage_num}"
+    for stage_num in sorted(base_config.STAGE_DIR_NAMES):
+        stage_dir = base_config.get_stage_dir(stage_num)
         if stage_dir.exists():
             LOGGER.info(f"Removing: {stage_dir}")
             shutil.rmtree(stage_dir, ignore_errors=True)
@@ -114,7 +114,7 @@ def step_2_airfoil_selection() -> Airfoil:
     LOGGER.info("STEP 2: Automated airfoil selection")
     LOGGER.info("=" * 60)
 
-    stage1_dir = base_config.RESULTS_DIR / "stage_1"
+    stage1_dir = base_config.get_stage_dir(1)
     stage1_dir.mkdir(parents=True, exist_ok=True)
 
     alpha_range = get_selection_alpha_range()
@@ -164,7 +164,7 @@ def step_3_xfoil_simulations(selected_airfoil: Airfoil) -> Path:
     LOGGER.info("STEP 3: Running XFOIL aerodynamic simulations")
     LOGGER.info("=" * 60)
 
-    stage2_dir = base_config.RESULTS_DIR / "stage_2"
+    stage2_dir = base_config.get_stage_dir(2)
     stage2_dir.mkdir(parents=True, exist_ok=True)
 
     flight_conditions = get_flight_conditions()
@@ -207,7 +207,7 @@ def step_3_xfoil_simulations(selected_airfoil: Airfoil) -> Path:
 
     LOGGER.info("XFOIL simulations completed.")
 
-    # Polars are in stage_2/final_analysis/, organize them into stage_2/polars/
+    # Polars are in the Stage 2 final_analysis folder; flatten them into polars/.
     source_polars = stage2_dir / "final_analysis"
     target_polars = stage2_dir / "polars"
     
@@ -229,7 +229,7 @@ def step_4_compressibility_correction(source_polars: Path) -> None:
     LOGGER.info("STEP 4: Applying compressibility corrections")
     LOGGER.info("=" * 60)
 
-    stage3_dir = base_config.RESULTS_DIR / "stage_3"
+    stage3_dir = base_config.get_stage_dir(3)
     stage3_dir.mkdir(parents=True, exist_ok=True)
 
     flight_conditions = get_flight_conditions()
@@ -277,7 +277,7 @@ def step_5_compute_metrics() -> list:
     LOGGER.info("STEP 5: Computing aerodynamic performance metrics")
     LOGGER.info("=" * 60)
 
-    stage2_dir = base_config.RESULTS_DIR / "stage_2"
+    stage2_dir = base_config.get_stage_dir(2)
     polars_dir = stage2_dir / "final_analysis"
     flight_conditions = get_flight_conditions()
     blade_sections = get_blade_sections()
@@ -291,7 +291,7 @@ def step_5_compute_metrics() -> list:
     LOGGER.info(f"Computed metrics for {len(metrics)} cases")
     
     # Generate Stage 4 summary
-    stage4_dir = base_config.RESULTS_DIR / "stage_4"
+    stage4_dir = base_config.get_stage_dir(4)
     summary_text = generate_stage4_summary(stage4_dir, metrics)
     write_stage_summary(4, summary_text, stage4_dir)
     LOGGER.info(f"Stage 4 summary written to: {stage4_dir / 'finalresults_stage4.txt'}")
@@ -328,7 +328,7 @@ def step_7_generate_figures(metrics: list) -> None:
     flight_conditions = get_flight_conditions()
     blade_sections = get_blade_sections()
     reynolds_table = get_reynolds_table()
-    stage3_dir = base_config.RESULTS_DIR / "stage_3"
+    stage3_dir = base_config.get_stage_dir(3)
 
     generate_all_figures(
         polars_dir, figures_dir, metrics, flight_conditions, blade_sections,
@@ -339,7 +339,7 @@ def step_7_generate_figures(metrics: list) -> None:
     LOGGER.info(f"All figures generated in: {figures_dir}")
     
     # Generate Stage 5 summary
-    stage5_dir = base_config.RESULTS_DIR / "stage_5"
+    stage5_dir = base_config.get_stage_dir(5)
     summary_text = generate_stage5_summary(stage5_dir)
     write_stage_summary(5, summary_text, stage5_dir)
     LOGGER.info(f"Stage 5 summary written to: {stage5_dir / 'finalresults_stage5.txt'}")
@@ -409,8 +409,8 @@ def main() -> None:
         LOGGER.info("Pipeline completed successfully!")
         LOGGER.info("=" * 60)
         LOGGER.info("Results available in:")
-        for i in range(1, 9):
-            LOGGER.info(f"  Stage {i}: {base_config.RESULTS_DIR / f'stage_{i}'}")
+        for stage_num, stage_name in base_config.STAGE_DIR_NAMES.items():
+            LOGGER.info(f"  Stage {stage_num}: {base_config.RESULTS_DIR / stage_name}")
         LOGGER.info("=" * 80)
 
     except Exception as e:

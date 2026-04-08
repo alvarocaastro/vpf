@@ -21,6 +21,26 @@ AIRFOIL_DATA_DIR: Final[Path] = ROOT_DIR / "data" / "airfoils"
 RESULTS_DIR: Final[Path] = ROOT_DIR / "results"
 POLARS_DIR: Final[Path] = RESULTS_DIR / "polars"
 
+STAGE_DIR_NAMES: Final[dict[int, str]] = {
+    1: "stage1_airfoil_selection",
+    2: "stage2_xfoil_simulations",
+    3: "stage3_compressibility_correction",
+    4: "stage4_performance_metrics",
+    5: "stage5_publication_figures",
+    6: "stage6_vpf_analysis",
+    7: "stage7_kinematics_analysis",
+    8: "stage8_sfc_analysis",
+}
+
+
+def get_stage_dir(stage_num: int) -> Path:
+    """Return the canonical results directory for a numbered stage."""
+
+    try:
+        return RESULTS_DIR / STAGE_DIR_NAMES[stage_num]
+    except KeyError as exc:
+        raise ValueError(f"Unknown stage number: {stage_num}") from exc
+
 
 def _normalize_xfoil_candidate(raw_path: str | Path) -> Path:
     """Convert a candidate path into the executable path when possible."""

@@ -18,10 +18,10 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from vfp_analysis.compressibility.adapters.correction_models.prandtl_glauert_model import (
+from vfp_analysis.stage3_compressibility_correction.adapters.correction_models.prandtl_glauert_model import (
     PrandtlGlauertModel,
 )
-from vfp_analysis.compressibility.core.domain.compressibility_case import (
+from vfp_analysis.stage3_compressibility_correction.core.domain.compressibility_case import (
     CompressibilityCase,
 )
 
