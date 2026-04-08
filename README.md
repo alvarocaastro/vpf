@@ -74,9 +74,7 @@ tfg_vpf/
 ├── config/                   # Configuración
 │   └── analysis_config.yaml  # Parámetros de simulación
 │
-├── notebooks/                # Análisis exploratorio (opcional)
-│   └── analysis_results.ipynb
-│
+
 └── latextfg/                 # Documento LaTeX de la tesis
     ├── main.tex
     ├── chapters/

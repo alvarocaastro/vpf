@@ -226,16 +226,7 @@ The entire analysis is reproducible:
 3. **Clean execution**: Previous results automatically cleaned
 4. **Version control**: Configuration and code can be versioned
 
-## Optional: Jupyter Notebook
 
-An exploratory analysis notebook is available:
-
-`notebooks/analysis_results.ipynb`
-
-This notebook demonstrates:
-- Loading results
-- Visualizing aerodynamic curves
-- Exploring efficiency trends
 
 ## Troubleshooting
 
