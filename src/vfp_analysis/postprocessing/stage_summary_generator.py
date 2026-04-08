@@ -4,7 +4,7 @@ Stage summary generator.
 Produces concise finalresults_stageX.txt files containing:
   - Timestamp and stage objective
   - Key numerical results (read from the output CSVs)
-  - Paths of files generated
+  - High-level artifact summaries without local filesystem paths
 
 Deliberately minimal — detailed methodology is documented in the thesis itself.
 """
@@ -61,10 +61,9 @@ def generate_stage1_summary(stage_dir: Path, selected_airfoil_name: str) -> str:
         f"Selected airfoil : {selected_airfoil_name}",
         f"Alpha range      : {alpha['min']:.1f}° → {alpha['max']:.1f}° (step {alpha['step']:.2f}°)",
         f"Reference Re     : {re:.2e}  |  Ncrit: {nc:.1f}",
-        "Scoring criteria : (CL/CD)_max (w=1.0)  +  α_stall·5 (w=5.0)  −  C̄_D·5000 (w=5000)",
+        "Scoring criteria : (CL/CD)_2nd·1.20  +  robustness_LD·0.35  +  stability_margin·0.80",
         "",
-        "Outputs:",
-        f"  {stage_dir / 'airfoil_selection'}",
+        "Outputs: stage artefacts generated successfully.",
     ]
     lines += _footer()
     return "\n".join(lines)
@@ -93,9 +92,7 @@ def generate_stage2_summary(stage_dir: Path, num_simulations: int) -> str:
         lines.append(f"  {fc.title():<10} Ncrit={nc_tab[fc]:.1f}  |  {re_str}")
     lines += [
         "",
-        "Outputs:",
-        f"  Polars  : {stage_dir / 'polars'}",
-        f"  Raw     : {stage_dir / 'final_analysis'}",
+        "Outputs: raw and organised polar files generated successfully.",
     ]
     lines += _footer()
     return "\n".join(lines)
@@ -135,7 +132,7 @@ def generate_stage3_summary(stage_dir: Path) -> str:
         except Exception:
             pass
 
-    lines += ["", f"Output: {stage_dir}"]
+    lines += ["", "Outputs: corrected polar data and comparison plots generated successfully."]
     lines += _footer()
     return "\n".join(lines)
 
@@ -205,7 +202,7 @@ def generate_stage5_summary(stage_dir: Path) -> str:
         "    conditions with VPF optimal α (★) and fixed cruise pitch (dashed red line)",
         "    + penalty annotation on mid_span curve  [3 files: takeoff, climb, descent]",
         "",
-        f"Output: {figures_dir}",
+        "Outputs: publication figures generated successfully.",
     ]
     lines += _footer()
     return "\n".join(lines)
@@ -241,10 +238,7 @@ def generate_stage6_summary(stage_dir: Path) -> str:
 
     lines += [
         "",
-        "Outputs:",
-        f"  {opt_file}",
-        f"  {adj_file}",
-        f"  {figures_dir}",
+        "Outputs: VPF tables, figures, and summary generated successfully.",
     ]
     lines += _footer()
     return "\n".join(lines)
@@ -283,9 +277,7 @@ def generate_stage7_summary(stage_dir: Path) -> str:
 
     lines += [
         "",
-        "Outputs:",
-        f"  {kin_file}",
-        f"  {figures_dir}",
+        "Outputs: kinematic tables and figures generated successfully.",
     ]
     lines += _footer()
     return "\n".join(lines)
@@ -323,9 +315,7 @@ def generate_stage8_summary(stage_dir: Path) -> str:
 
     lines += [
         "",
-        "Outputs:",
-        f"  {sfc_file}",
-        f"  {figures_dir}",
+        "Outputs: SFC tables, figures, and summary generated successfully.",
     ]
     lines += _footer()
     return "\n".join(lines)
