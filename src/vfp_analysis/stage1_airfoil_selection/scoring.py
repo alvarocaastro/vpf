@@ -7,6 +7,10 @@ import pandas as pd
 
 from vfp_analysis.postprocessing.aerodynamics_utils import find_second_peak_row
 
+WEIGHT_MAX_LD = 1.20
+WEIGHT_ROBUSTNESS_LD = 0.35
+WEIGHT_STABILITY_MARGIN = 0.80
+
 
 @dataclass(frozen=True)
 class AirfoilScore:
@@ -37,7 +41,10 @@ def score_airfoil(df: pd.DataFrame) -> AirfoilScore:
 
     Composite score:
 
-    ``S = 1.0 * max_ld + 0.5 * robustness_ld + 1.0 * stability_margin``
+    ``S = 1.20 * max_ld + 0.35 * robustness_ld + 0.80 * stability_margin``
+
+    This keeps efficiency as the leading term, while still rewarding profiles
+    that are stable and not overly sensitive around the operating point.
     """
 
     if df.empty:
@@ -76,7 +83,11 @@ def score_airfoil(df: pd.DataFrame) -> AirfoilScore:
     df_window = valid[(valid["alpha"] >= alpha_opt - 1.0) & (valid["alpha"] <= alpha_opt + 1.0)]
     robustness_ld = float(df_window["ld"].mean()) if not df_window.empty else max_ld
 
-    total_score = 1.0 * max_ld + 0.5 * robustness_ld + 1.0 * stability_margin
+    total_score = (
+        WEIGHT_MAX_LD * max_ld
+        + WEIGHT_ROBUSTNESS_LD * robustness_ld
+        + WEIGHT_STABILITY_MARGIN * stability_margin
+    )
 
     return AirfoilScore(
         airfoil=airfoil_name,
