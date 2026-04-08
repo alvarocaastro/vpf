@@ -3,13 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from vfp_analysis.core.domain.simulation_condition import SimulationCondition
-from vfp_analysis.ports.xfoil_runner_port import XfoilRunnerPort
 from vfp_analysis.xfoil_runner import XfoilPolarRequest, run_xfoil_polar
-from vfp_analysis import config
 
 
-class XfoilRunnerAdapter(XfoilRunnerPort):
-    """Adapter that delegates polar runs to the existing xfoil_runner module."""
+class XfoilRunnerAdapter:
+    """Thin wrapper around xfoil_runner with a 180 s timeout for final analyses."""
 
     def run_polar(
         self,
@@ -27,7 +25,4 @@ class XfoilRunnerAdapter(XfoilRunnerPort):
             n_crit=condition.ncrit,
             output_file=output_file,
         )
-        # Allow longer runtime in final analyses to reduce timeouts.
         run_xfoil_polar(request, timeout=180.0)
-
-

@@ -32,12 +32,6 @@ from vfp_analysis.adapters.xfoil.xfoil_runner_adapter import XfoilRunnerAdapter
 from vfp_analysis.compressibility.adapters.correction_models.prandtl_glauert_model import (
     PrandtlGlauertModel,
 )
-from vfp_analysis.compressibility.adapters.filesystem.corrected_results_writer import (
-    FilesystemResultsWriter,
-)
-from vfp_analysis.compressibility.adapters.filesystem.polar_reader import (
-    FilesystemPolarReader,
-)
 from vfp_analysis.compressibility.core.domain.compressibility_case import (
     CompressibilityCase,
 )
@@ -242,12 +236,8 @@ def step_4_compressibility_correction(source_polars: Path) -> None:
     blade_sections = get_blade_sections()
     target_mach = get_target_mach()
 
-    reader = FilesystemPolarReader()
-    writer = FilesystemResultsWriter()
     model = PrandtlGlauertModel()
     service = CompressibilityCorrectionService(
-        polar_reader=reader,
-        results_writer=writer,
         correction_model=model,
         base_output_dir=stage3_dir,
     )
@@ -337,9 +327,13 @@ def step_7_generate_figures(metrics: list) -> None:
     polars_dir = output_dirs["polars"]
     flight_conditions = get_flight_conditions()
     blade_sections = get_blade_sections()
+    reynolds_table = get_reynolds_table()
+    stage3_dir = base_config.RESULTS_DIR / "stage_3"
 
     generate_all_figures(
-        polars_dir, figures_dir, metrics, flight_conditions, blade_sections
+        polars_dir, figures_dir, metrics, flight_conditions, blade_sections,
+        stage3_dir=stage3_dir,
+        reynolds_table=reynolds_table,
     )
 
     LOGGER.info(f"All figures generated in: {figures_dir}")

@@ -27,6 +27,7 @@ import pandas as pd
 from vfp_analysis.config_loader import get_plot_settings
 from vfp_analysis.postprocessing.aerodynamics_utils import (
     find_second_peak_row,
+    resolve_efficiency_column,
     resolve_polar_file,
 )
 from vfp_analysis.postprocessing.metrics import AerodynamicMetrics
@@ -142,6 +143,51 @@ def _smart_annotation(
         color="#B22222",
         zorder=7,
     )
+
+
+# ---------------------------------------------------------------------------
+# Helpers for corrected-polar figures (Figures A and B)
+# ---------------------------------------------------------------------------
+
+def _load_corrected_polar(
+    stage3_dir: Path,
+    condition: str,
+    section: str,
+) -> Optional[pd.DataFrame]:
+    """Load corrected_polar.csv from stage_3 output. Returns None if missing."""
+    path = stage3_dir / condition.lower() / section / "corrected_polar.csv"
+    if not path.exists():
+        LOGGER.warning("Corrected polar not found: %s", path)
+        return None
+    return pd.read_csv(path)
+
+
+def _interpolate_ld_at_alpha(
+    df: pd.DataFrame,
+    eff_col: str,
+    alpha_target: float,
+) -> Optional[float]:
+    """Linear interpolation of efficiency at a given alpha. Returns None if out of range."""
+    df_clean = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[eff_col, "alpha"])
+    if df_clean.empty:
+        return None
+    below = df_clean[df_clean["alpha"] <= alpha_target]
+    above = df_clean[df_clean["alpha"] >= alpha_target]
+    if below.empty or above.empty:
+        return None
+    row_lo = below.iloc[-1]
+    row_hi = above.iloc[0]
+    if row_lo["alpha"] == row_hi["alpha"]:
+        return float(row_lo[eff_col])
+    t = (alpha_target - row_lo["alpha"]) / (row_hi["alpha"] - row_lo["alpha"])
+    return float(row_lo[eff_col] + t * (row_hi[eff_col] - row_lo[eff_col]))
+
+
+def _format_reynolds(re: float) -> str:
+    """Format Reynolds number as LaTeX string, e.g. 'Re = 2.5×10⁶'."""
+    exp = int(np.floor(np.log10(re)))
+    coeff = re / 10 ** exp
+    return rf"Re = {coeff:.1f}$\times 10^{{{exp}}}$"
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +449,253 @@ def generate_alpha_opt_vs_condition(
 
 
 # ---------------------------------------------------------------------------
+# Figure A: Section polar comparison (efficiency + lift) per flight condition
+# ---------------------------------------------------------------------------
+
+def generate_section_polar_comparison(
+    stage3_dir: Path,
+    figures_dir: Path,
+    flight_conditions: List[str],
+    blade_sections: Optional[List[str]] = None,
+) -> None:
+    """
+    For each flight condition, generate a dual-panel figure:
+      - Left panel:  CL/CD_corrected vs α for root, mid_span, tip
+      - Right panel: CL_corrected vs α for root, mid_span, tip
+
+    The second efficiency peak (actual operating point) is marked with a
+    star on each curve in both panels.
+    """
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    settings = get_plot_settings()
+    w = settings["figure_size"]["width"]
+    h = settings["figure_size"]["height"]
+    sections = blade_sections or ["root", "mid_span", "tip"]
+
+    for flight in flight_conditions:
+        fig, (ax_eff, ax_cl) = plt.subplots(1, 2, figsize=(w * 2 + 0.5, h))
+        any_plotted = False
+
+        for section in sections:
+            df = _load_corrected_polar(stage3_dir, flight, section)
+            if df is None:
+                continue
+
+            try:
+                eff_col = resolve_efficiency_column(df)
+            except ValueError:
+                LOGGER.warning("No efficiency column in %s/%s corrected polar.", flight, section)
+                continue
+
+            cl_col = "cl_corrected" if "cl_corrected" in df.columns else "cl"
+            color = SECTION_COLORS.get(section, "#333333")
+            section_label = section.replace("_", " ").title()
+
+            # Locate second peak
+            try:
+                row_opt = find_second_peak_row(df, eff_col)
+                alpha_opt = float(row_opt["alpha"])
+                ld_opt = float(row_opt[eff_col])
+                cl_at_opt = float(row_opt[cl_col]) if cl_col in row_opt.index else None
+                has_opt = True
+            except (ValueError, KeyError):
+                has_opt = False
+                alpha_opt = ld_opt = cl_at_opt = None
+
+            legend_lbl = (
+                rf"{section_label} ($\alpha_{{opt}}$ = {alpha_opt:.1f}°)"
+                if has_opt else section_label
+            )
+
+            # --- Left: efficiency polar ---
+            ax_eff.plot(df["alpha"], df[eff_col], color=color, label=legend_lbl, zorder=3)
+            if has_opt:
+                ax_eff.plot(
+                    alpha_opt, ld_opt,
+                    marker="*", color=color, markersize=11,
+                    markeredgecolor="white", markeredgewidth=0.7,
+                    zorder=6, linestyle="none",
+                )
+                ax_eff.axvline(alpha_opt, color=color, linestyle=":", linewidth=0.8, alpha=0.5)
+
+            # --- Right: lift polar ---
+            ax_cl.plot(df["alpha"], df[cl_col], color=color, label=legend_lbl, zorder=3)
+            if has_opt and cl_at_opt is not None:
+                ax_cl.plot(
+                    alpha_opt, cl_at_opt,
+                    marker="*", color=color, markersize=11,
+                    markeredgecolor="white", markeredgewidth=0.7,
+                    zorder=6, linestyle="none",
+                )
+
+            any_plotted = True
+
+        if not any_plotted:
+            plt.close(fig)
+            continue
+
+        ax_eff.set_xlabel(r"Angle of attack $\alpha$ [°]")
+        ax_eff.set_ylabel(r"$C_L/C_D$ (Prandtl-Glauert corrected) [–]")
+        ax_eff.set_title(
+            f"Efficiency Polar — {flight.title()}\n"
+            r"(★ = 2nd peak, actual operating point)"
+        )
+        ax_eff.legend(loc="lower right")
+
+        ax_cl.set_xlabel(r"Angle of attack $\alpha$ [°]")
+        ax_cl.set_ylabel(r"$C_L$ (Prandtl-Glauert corrected) [–]")
+        ax_cl.set_title(
+            f"Lift Polar — {flight.title()}\n"
+            r"(★ = $\alpha_{opt}$ from efficiency peak)"
+        )
+        ax_cl.legend(loc="lower right")
+
+        fig.suptitle(
+            f"NACA 65-410 — Section Comparison — {flight.title()}",
+            fontsize=11, fontweight="bold",
+        )
+        fig.tight_layout()
+        fig.savefig(figures_dir / f"section_polar_comparison_{flight}.png")
+        plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Figure B: Cruise penalty figure — central VPF thesis proof
+# ---------------------------------------------------------------------------
+
+def generate_cruise_penalty_figure(
+    stage3_dir: Path,
+    figures_dir: Path,
+    non_cruise_conditions: Optional[List[str]] = None,
+    blade_sections: Optional[List[str]] = None,
+    reynolds_table: Optional[Dict[str, Dict[str, float]]] = None,
+    alpha_min_second_peak: float = 3.0,
+) -> None:
+    """
+    For each non-cruise flight condition, generate a single figure showing:
+      - The efficiency polars (CL/CD_corrected vs α) for all blade sections
+        (root, mid_span, tip), each with a different Re in the legend
+      - A green star on each curve marking α_opt (optimal with VPF)
+      - A vertical dashed red line at alpha_cruise_design (the cruise operating
+        angle, derived from the actual cruise data) showing where a fixed-pitch
+        blade would operate
+      - A percentage annotation on the mid_span curve quantifying the
+        efficiency penalty of the fixed-pitch approach
+
+    This figure is the central visual proof of the VPF concept.
+    """
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    settings = get_plot_settings()
+    w = settings["figure_size"]["width"]
+    h = settings["figure_size"]["height"]
+
+    sections = blade_sections or ["root", "mid_span", "tip"]
+    conditions = non_cruise_conditions or ["takeoff", "climb", "descent"]
+    re_table = reynolds_table or {}
+
+    # --- Derive alpha_cruise_design from data (not hardcoded) ---
+    alpha_cruise_design: float = _ALPHA_CRUISE_REF  # fallback
+    cruise_df = _load_corrected_polar(stage3_dir, "cruise", "mid_span")
+    if cruise_df is not None:
+        try:
+            eff_col_cr = resolve_efficiency_column(cruise_df)
+            row_cr = find_second_peak_row(cruise_df, eff_col_cr, alpha_min_second_peak)
+            alpha_cruise_design = float(row_cr["alpha"])
+            LOGGER.info("Cruise design alpha (from data): %.2f°", alpha_cruise_design)
+        except (ValueError, KeyError):
+            LOGGER.warning("Could not determine cruise alpha_opt from data; using %.1f°", _ALPHA_CRUISE_REF)
+
+    for condition in conditions:
+        fig, ax = plt.subplots(figsize=(w + 1.0, h + 0.5))
+        any_plotted = False
+        mid_span_ld_opt: Optional[float] = None
+
+        for section in sections:
+            df = _load_corrected_polar(stage3_dir, condition, section)
+            if df is None:
+                continue
+
+            try:
+                eff_col = resolve_efficiency_column(df)
+            except ValueError:
+                continue
+
+            color = SECTION_COLORS.get(section, "#333333")
+            section_label = section.replace("_", " ").title()
+
+            # Reynolds label for legend
+            re_val = re_table.get(condition, {}).get(section)
+            re_str = _format_reynolds(re_val) if re_val else ""
+            curve_label = f"{section_label}  ({re_str})" if re_str else section_label
+
+            ax.plot(df["alpha"], df[eff_col], color=color, label=curve_label, zorder=3)
+
+            # Mark VPF optimal point
+            try:
+                row_opt = find_second_peak_row(df, eff_col, alpha_min_second_peak)
+                alpha_opt = float(row_opt["alpha"])
+                ld_opt = float(row_opt[eff_col])
+                ax.plot(
+                    alpha_opt, ld_opt,
+                    marker="*", color="darkgreen", markersize=13,
+                    markeredgecolor="white", markeredgewidth=1.0,
+                    zorder=7, linestyle="none",
+                    label=rf"  VPF opt. $\alpha$ = {alpha_opt:.1f}° [{section_label}]",
+                )
+                if section == "mid_span":
+                    mid_span_ld_opt = ld_opt
+                    mid_span_eff_col = eff_col
+                    mid_span_df = df
+            except (ValueError, KeyError):
+                pass
+
+            any_plotted = True
+
+        if not any_plotted:
+            plt.close(fig)
+            continue
+
+        # --- Fixed-pitch cruise reference line ---
+        ax.axvline(
+            alpha_cruise_design,
+            color="#B22222",
+            linestyle="--",
+            linewidth=1.4,
+            zorder=5,
+            label=rf"Fixed-pitch cruise $\alpha_{{design}}$ = {alpha_cruise_design:.1f}°",
+        )
+
+        # --- Penalty annotation on mid_span curve ---
+        if mid_span_ld_opt is not None:
+            ld_at_cruise = _interpolate_ld_at_alpha(mid_span_df, mid_span_eff_col, alpha_cruise_design)
+            if ld_at_cruise is not None and ld_at_cruise > 0:
+                penalty_pct = 100.0 * (mid_span_ld_opt - ld_at_cruise) / mid_span_ld_opt
+                eff_series = mid_span_df[mid_span_eff_col].replace([np.inf, -np.inf], np.nan).dropna()
+                ld_range = float(eff_series.max() - eff_series.min()) if not eff_series.empty else 1.0
+                alpha_range = float(mid_span_df["alpha"].max() - mid_span_df["alpha"].min())
+                ax.annotate(
+                    rf"Fixed-pitch loss $\approx${penalty_pct:.1f}%",
+                    xy=(alpha_cruise_design, ld_at_cruise),
+                    xytext=(alpha_cruise_design + 0.06 * alpha_range, ld_at_cruise - 0.10 * ld_range),
+                    arrowprops=dict(arrowstyle="->", color="#B22222", lw=1.1),
+                    fontsize=9, color="#B22222", fontweight="bold",
+                    zorder=8,
+                )
+
+        ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
+        ax.set_ylabel(r"$C_L/C_D$ (Prandtl-Glauert corrected) [–]")
+        ax.set_title(
+            f"VPF Efficiency Gain — {condition.title()} Condition\n"
+            r"★ = VPF optimal $\alpha$   |   $\mathbf{-\,-}$ = fixed cruise pitch (penalty)",
+            pad=8,
+        )
+        ax.legend(loc="lower right", fontsize=8)
+        fig.tight_layout()
+        fig.savefig(figures_dir / f"cruise_penalty_{condition}.png")
+        plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
@@ -412,15 +705,20 @@ def generate_all_figures(
     metrics: List[AerodynamicMetrics],
     flight_conditions: List[str],
     blade_sections: List[str],
+    stage3_dir: Optional[Path] = None,
+    reynolds_table: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> None:
     """
-    Generate the three core publication figures for the thesis.
+    Generate all publication figures for the thesis.
 
-    Removed from earlier version (low informational value):
-      - generate_cl_vs_alpha_plots   (12 individual CL-α plots)
-      - generate_cd_vs_alpha_plots   (12 individual CD-α plots)
-      - generate_polar_plots         (12 individual CL-CD polars)
-      - generate_efficiency_vs_reynolds (redundant with by-section)
+    Core figures (Stages 2 polars):
+      1. generate_efficiency_plots       — CL/CD vs α per case
+      2. generate_efficiency_by_section  — section comparison per condition
+      3. generate_alpha_opt_vs_condition — central α_opt matrix
+
+    Extended figures (Stage 3 corrected polars, requires *stage3_dir*):
+      A. generate_section_polar_comparison — efficiency + lift polars per condition
+      B. generate_cruise_penalty_figure    — VPF penalty proof (central thesis fig.)
     """
     LOGGER.info("Generating efficiency plots (individual)...")
     generate_efficiency_plots(polars_dir, figures_dir, flight_conditions, blade_sections)
@@ -430,5 +728,23 @@ def generate_all_figures(
 
     LOGGER.info("Generating alpha_opt vs condition summary plot...")
     generate_alpha_opt_vs_condition(metrics, figures_dir)
+
+    if stage3_dir is not None and stage3_dir.is_dir():
+        LOGGER.info("Generating section polar comparison figures (Figure A)...")
+        generate_section_polar_comparison(
+            stage3_dir, figures_dir, flight_conditions, blade_sections
+        )
+
+        LOGGER.info("Generating cruise penalty figures (Figure B)...")
+        non_cruise = [c for c in flight_conditions if c != "cruise"]
+        generate_cruise_penalty_figure(
+            stage3_dir,
+            figures_dir,
+            non_cruise_conditions=non_cruise,
+            blade_sections=blade_sections,
+            reynolds_table=reynolds_table,
+        )
+    else:
+        LOGGER.info("stage3_dir not provided or does not exist; skipping Figures A and B.")
 
     LOGGER.info("All figures generated in: %s", figures_dir)

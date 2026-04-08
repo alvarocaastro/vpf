@@ -18,16 +18,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import yaml
+
 from vfp_analysis import config as base_config
 from vfp_analysis.config_loader import get_output_dirs
 # Trigger shared rcParams by importing from figure_generator
 from vfp_analysis.postprocessing.figure_generator import SECTION_COLORS  # noqa: F401
-from vfp_analysis.sfc_analysis.adapters.filesystem.data_loader_adapter import (
-    FilesystemSfcDataLoader,
-)
-from vfp_analysis.sfc_analysis.adapters.filesystem.results_writer_adapter import (
-    FilesystemSfcResultsWriter,
-)
+from vfp_analysis.sfc_analysis.core.domain.sfc_parameters import EngineBaseline, SfcAnalysisResult
 from vfp_analysis.sfc_analysis.core.services.sfc_analysis_service import (
     compute_sfc_analysis,
 )
@@ -188,6 +185,30 @@ def _plot_efficiency_vs_sfc(sfc_results: list, figures_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# I/O helpers (inlined from removed adapter classes)
+# ---------------------------------------------------------------------------
+
+def _write_sfc_table(sfc_results: list, output_path: Path) -> None:
+    """Write SFC analysis results to CSV."""
+    rows = [
+        {
+            "condition": r.condition,
+            "CL_CD_baseline": r.cl_cd_baseline,
+            "CL_CD_vpf": r.cl_cd_vpf,
+            "fan_efficiency_baseline": r.fan_efficiency_baseline,
+            "fan_efficiency_new": r.fan_efficiency_new,
+            "SFC_baseline": r.sfc_baseline,
+            "SFC_new": r.sfc_new,
+            "SFC_reduction_percent": r.sfc_reduction_percent,
+        }
+        for r in sfc_results
+    ]
+    df = pd.DataFrame(rows).sort_values("condition")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False, float_format="%.6f")
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -207,21 +228,25 @@ def run_sfc_analysis() -> None:
 
     # Step 1: Load aerodynamic results
     LOGGER.info("Loading aerodynamic performance data...")
-    loader = FilesystemSfcDataLoader()
-
-    performance_df   = loader.load_performance_data(tables_dir / "summary_table.csv")
-    optimal_pitch_df = loader.load_optimal_pitch_data(tables_dir / "vpf_optimal_pitch.csv")
-
-    if optimal_pitch_df.empty:
+    optimal_pitch_path = tables_dir / "vpf_optimal_pitch.csv"
+    if not optimal_pitch_path.exists():
         LOGGER.warning("No optimal pitch data found. Skipping SFC analysis.")
         return
-
+    optimal_pitch_df = pd.read_csv(optimal_pitch_path)
     LOGGER.info("Loaded %d optimal pitch records", len(optimal_pitch_df))
 
     # Step 2: Load engine baseline
     LOGGER.info("Loading engine baseline parameters...")
     engine_config_path = base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
-    engine_baseline    = loader.load_engine_baseline(engine_config_path)
+    with engine_config_path.open("r", encoding="utf-8") as f:
+        _cfg = yaml.safe_load(f)
+    engine_baseline = EngineBaseline(
+        baseline_sfc=_cfg["baseline_sfc"],
+        fan_efficiency=_cfg["fan_efficiency"],
+        bypass_ratio=_cfg["bypass_ratio"],
+        cruise_velocity=_cfg["cruise_velocity"],
+        jet_velocity=_cfg["jet_velocity"],
+    )
     LOGGER.info("Baseline SFC: %.4f lb/(lbf·hr)", engine_baseline.baseline_sfc)
 
     # Step 3: Compute SFC improvement
@@ -235,12 +260,11 @@ def run_sfc_analysis() -> None:
 
     # Step 5: Write results
     LOGGER.info("Writing SFC analysis results...")
-    writer = FilesystemSfcResultsWriter()
-    writer.write_sfc_table(sfc_results, tables_dir / "sfc_analysis.csv")
-
-    summary_text     = generate_sfc_summary(sfc_results)
+    _write_sfc_table(sfc_results, tables_dir / "sfc_analysis.csv")
+    summary_text = generate_sfc_summary(sfc_results)
     sfc_summary_path = output_dirs["sfc_analysis_summary"]
-    writer.write_analysis_summary(summary_text, sfc_summary_path)
+    sfc_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    sfc_summary_path.write_text(summary_text, encoding="utf-8")
 
     # Step 6: Stage summary
     from vfp_analysis.postprocessing.stage_summary_generator import (

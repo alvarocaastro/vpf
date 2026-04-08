@@ -19,24 +19,16 @@ from vfp_analysis.compressibility.core.domain.compressibility_case import (
 from vfp_analysis.compressibility.core.domain.correction_result import (
     CorrectionResult,
 )
-from vfp_analysis.compressibility.ports.corrected_results_writer_port import (
-    CorrectedResultsWriterPort,
-)
-from vfp_analysis.compressibility.ports.polar_reader_port import PolarReaderPort
 
 
 class CompressibilityCorrectionService:
-    """Service that orchestrates compressibility correction."""
+    """Orchestrates Prandtl-Glauert compressibility correction for one case."""
 
     def __init__(
         self,
-        polar_reader: PolarReaderPort,
-        results_writer: CorrectedResultsWriterPort,
         correction_model: PrandtlGlauertModel,
         base_output_dir: Path,
     ) -> None:
-        self._reader = polar_reader
-        self._writer = results_writer
         self._model = correction_model
         self._base_output = base_output_dir
 
@@ -46,50 +38,30 @@ class CompressibilityCorrectionService:
         input_polar_path: Path,
         section: Optional[str] = None,
     ) -> CorrectionResult:
-        """
-        Apply compressibility correction to one case.
+        """Apply compressibility correction to one polar file."""
+        if not input_polar_path.is_file():
+            raise FileNotFoundError(f"Polar file not found: {input_polar_path}")
 
-        Parameters
-        ----------
-        case : CompressibilityCase
-            Correction case (flight condition, target Mach).
-        input_polar_path : Path
-            Path to original polar CSV from XFOIL.
-        section : Optional[str]
-            Blade section name (root, mid_span, tip) if applicable.
-
-        Returns
-        -------
-        CorrectionResult
-            Paths to generated corrected files.
-        """
-        # Read original polar
-        df_original = self._reader.read_polar(input_polar_path)
-
-        # Apply correction
+        df_original = pd.read_csv(input_polar_path)
         df_corrected = self._model.correct_polar(df_original, case)
 
-        # Build output directory
         output_dir = self._base_output / case.flight_condition.lower()
         if section:
             output_dir = output_dir / section
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write corrected CSVs
-        polar_path = output_dir / "corrected_polar.csv"
-        cl_alpha_path = output_dir / "corrected_cl_alpha.csv"
+        polar_path      = output_dir / "corrected_polar.csv"
+        cl_alpha_path   = output_dir / "corrected_cl_alpha.csv"
         efficiency_path = output_dir / "corrected_efficiency.csv"
-        plot_path = output_dir / "corrected_plots.png"
+        plot_path       = output_dir / "corrected_plots.png"
 
-        self._writer.write_corrected_polar(df_corrected, polar_path)
-        self._writer.write_corrected_cl_alpha(df_corrected, cl_alpha_path)
-        self._writer.write_corrected_efficiency(df_corrected, efficiency_path)
+        df_corrected.to_csv(polar_path, index=False, float_format="%.6f")
+        df_corrected[["alpha", "cl_corrected"]].to_csv(cl_alpha_path, index=False, float_format="%.6f")
+        df_corrected[["alpha", "ld_corrected"]].to_csv(efficiency_path, index=False, float_format="%.6f")
 
-        # Generate comparison plots
         self._plot_comparison(df_original, df_corrected, case, plot_path)
 
         case_name = f"{case.flight_condition}_{section}" if section else case.flight_condition
-
         return CorrectionResult(
             case=case_name,
             section=section,
@@ -110,47 +82,25 @@ class CompressibilityCorrectionService:
         """Generate comparison plots: original vs corrected."""
         fig, axes = plt.subplots(2, 1, figsize=(6.0, 8.0))
 
-        # Plot 1: CL vs alpha
         ax1 = axes[0]
-        ax1.plot(
-            df_original["alpha"],
-            df_original["cl"],
-            label=f"Original (M={case.reference_mach:.2f})",
-            linewidth=1.4,
-            linestyle="--",
-        )
-        ax1.plot(
-            df_corrected["alpha"],
-            df_corrected["cl_corrected"],
-            label=f"Corrected (M={case.target_mach:.2f})",
-            linewidth=1.6,
-        )
+        ax1.plot(df_original["alpha"], df_original["cl"],
+                 label=f"Original (M={case.reference_mach:.2f})", linewidth=1.4, linestyle="--")
+        ax1.plot(df_corrected["alpha"], df_corrected["cl_corrected"],
+                 label=f"Corrected (M={case.target_mach:.2f})", linewidth=1.6)
         ax1.set_xlabel(r"$\alpha$ [deg]")
         ax1.set_ylabel(r"$C_L$")
         ax1.set_title(f"$C_L$ vs $\\alpha$ – {case.flight_condition}")
-        ax1.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
         ax1.legend(loc="lower right")
 
-        # Plot 2: CL/CD vs alpha
         ax2 = axes[1]
         ld_original = df_original["cl"] / df_original["cd"]
-        ax2.plot(
-            df_original["alpha"],
-            ld_original,
-            label=f"Original (M={case.reference_mach:.2f})",
-            linewidth=1.4,
-            linestyle="--",
-        )
-        ax2.plot(
-            df_corrected["alpha"],
-            df_corrected["ld_corrected"],
-            label=f"Corrected (M={case.target_mach:.2f})",
-            linewidth=1.6,
-        )
+        ax2.plot(df_original["alpha"], ld_original,
+                 label=f"Original (M={case.reference_mach:.2f})", linewidth=1.4, linestyle="--")
+        ax2.plot(df_corrected["alpha"], df_corrected["ld_corrected"],
+                 label=f"Corrected (M={case.target_mach:.2f})", linewidth=1.6)
         ax2.set_xlabel(r"$\alpha$ [deg]")
         ax2.set_ylabel(r"$C_L/C_D$")
-        ax2.set_title(f"Eficiencia $C_L/C_D$ vs $\\alpha$ – {case.flight_condition}")
-        ax2.grid(True, linestyle=":", linewidth=0.5, alpha=0.7)
+        ax2.set_title(f"Efficiency $C_L/C_D$ vs $\\alpha$ – {case.flight_condition}")
         ax2.legend(loc="lower right")
 
         fig.tight_layout()
