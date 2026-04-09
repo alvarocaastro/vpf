@@ -1,5 +1,8 @@
 """
-Service for applying compressibility corrections to aerodynamic results.
+Service for applying compressibility corrections to aerodynamic polars.
+
+Applies both Prandtl-Glauert (PG) and Kármán-Tsien (K-T) corrections so that
+results can be compared.  Wave drag (Lock's law) is included via the K-T model.
 """
 
 from __future__ import annotations
@@ -7,11 +10,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+import math
 import matplotlib.pyplot as plt
 import pandas as pd
 
 from vfp_analysis.stage3_compressibility_correction.adapters.correction_models.prandtl_glauert_model import (
     PrandtlGlauertModel,
+)
+from vfp_analysis.stage3_compressibility_correction.adapters.correction_models.karman_tsien_model import (
+    KarmanTsienModel,
 )
 from vfp_analysis.stage3_compressibility_correction.core.domain.compressibility_case import (
     CompressibilityCase,
@@ -19,17 +26,29 @@ from vfp_analysis.stage3_compressibility_correction.core.domain.compressibility_
 from vfp_analysis.stage3_compressibility_correction.core.domain.correction_result import (
     CorrectionResult,
 )
+from vfp_analysis.stage3_compressibility_correction.utils.critical_mach import (
+    estimate_mcr,
+    estimate_mdd,
+)
+from vfp_analysis.stage2_xfoil_simulations.plot_style import (
+    COLORS,
+    FLIGHT_LABELS,
+    SECTION_LABELS,
+    apply_style,
+)
 
 
 class CompressibilityCorrectionService:
-    """Orchestrates Prandtl-Glauert compressibility correction for one case."""
+    """Orchestrates PG + K-T compressibility corrections for one (flight, section) case."""
 
     def __init__(
         self,
-        correction_model: PrandtlGlauertModel,
+        pg_model: PrandtlGlauertModel,
+        kt_model: KarmanTsienModel,
         base_output_dir: Path,
     ) -> None:
-        self._model = correction_model
+        self._pg = pg_model
+        self._kt = kt_model
         self._base_output = base_output_dir
 
     def correct_case(
@@ -38,28 +57,33 @@ class CompressibilityCorrectionService:
         input_polar_path: Path,
         section: Optional[str] = None,
     ) -> CorrectionResult:
-        """Apply compressibility correction to one polar file."""
+        """Apply PG + K-T corrections to one polar file."""
         if not input_polar_path.is_file():
             raise FileNotFoundError(f"Polar file not found: {input_polar_path}")
 
         df_original = pd.read_csv(input_polar_path)
-        df_corrected = self._model.correct_polar(df_original, case)
+
+        # Step 1: Prandtl-Glauert correction (adds cl_pg, ld_pg, cd_corrected, mach_target)
+        df_pg = self._pg.correct_polar(df_original, case)
+
+        # Step 2: Kármán-Tsien correction (adds cl_kt, ld_kt; updates cd_corrected with wave drag)
+        df_corrected = self._kt.correct_polar(df_pg, case)
 
         output_dir = self._base_output / case.flight_condition.lower()
         if section:
             output_dir = output_dir / section
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        polar_path      = output_dir / "corrected_polar.csv"
-        cl_alpha_path   = output_dir / "corrected_cl_alpha.csv"
-        efficiency_path = output_dir / "corrected_efficiency.csv"
-        plot_path       = output_dir / "corrected_plots.png"
+        # Single CSV with all correction data
+        polar_path = output_dir / "corrected_polar.csv"
+        export_cols = ["alpha", "cl", "cl_pg", "cl_kt",
+                       "cd", "cd_corrected", "ld_pg", "ld_kt",
+                       "mach_target", "re", "ncrit", "cm", "cm_pg"]
+        export_cols = [c for c in export_cols if c in df_corrected.columns]
+        df_corrected[export_cols].to_csv(polar_path, index=False, float_format="%.6f")
 
-        df_corrected.to_csv(polar_path, index=False, float_format="%.6f")
-        df_corrected[["alpha", "cl_corrected"]].to_csv(cl_alpha_path, index=False, float_format="%.6f")
-        df_corrected[["alpha", "ld_corrected"]].to_csv(efficiency_path, index=False, float_format="%.6f")
-
-        self._plot_comparison(df_original, df_corrected, case, plot_path)
+        plot_path = output_dir / "corrected_plots.png"
+        self._plot_comparison(df_original, df_corrected, case, section, plot_path)
 
         case_name = f"{case.flight_condition}_{section}" if section else case.flight_condition
         return CorrectionResult(
@@ -67,8 +91,8 @@ class CompressibilityCorrectionService:
             section=section,
             output_dir=output_dir,
             corrected_polar_path=polar_path,
-            corrected_cl_alpha_path=cl_alpha_path,
-            corrected_efficiency_path=efficiency_path,
+            corrected_cl_alpha_path=polar_path,      # kept for interface compatibility
+            corrected_efficiency_path=polar_path,
             corrected_plot_path=plot_path,
         )
 
@@ -77,32 +101,81 @@ class CompressibilityCorrectionService:
         df_original: pd.DataFrame,
         df_corrected: pd.DataFrame,
         case: CompressibilityCase,
+        section: Optional[str],
         output_path: Path,
     ) -> None:
-        """Generate comparison plots: original vs corrected."""
-        fig, axes = plt.subplots(2, 1, figsize=(6.0, 8.0))
+        """
+        Plot CL(α) and CL/CD(α) showing three curves:
+          - Original XFOIL at M_ref (grey dashed)
+          - Prandtl-Glauert at M_target (colour dashed)
+          - Kármán-Tsien at M_target (colour solid)
+        with Mcr annotated.
+        """
+        flight = case.flight_condition.lower()
+        color  = COLORS.get(flight, "#4477AA")
+        flight_label = FLIGHT_LABELS.get(flight, flight.capitalize())
+        section_label = SECTION_LABELS.get(section or "", section or "")
 
-        ax1 = axes[0]
-        ax1.plot(df_original["alpha"], df_original["cl"],
-                 label=f"Original (M={case.reference_mach:.2f})", linewidth=1.4, linestyle="--")
-        ax1.plot(df_corrected["alpha"], df_corrected["cl_corrected"],
-                 label=f"Corrected (M={case.target_mach:.2f})", linewidth=1.6)
-        ax1.set_xlabel(r"$\alpha$ [deg]")
-        ax1.set_ylabel(r"$C_L$")
-        ax1.set_title(f"$C_L$ vs $\\alpha$ – {case.flight_condition}")
-        ax1.legend(loc="lower right")
+        # Estimate Mcr from median operating CL (alpha 3-10°)
+        df_op = df_original[(df_original["alpha"] >= 3) & (df_original["alpha"] <= 10)]
+        cl_op = float(df_op["cl"].median()) if not df_op.empty else 0.6
+        mcr = estimate_mcr(cl_op)
+        is_supercritical = case.target_mach > mcr
 
-        ax2 = axes[1]
-        ld_original = df_original["cl"] / df_original["cd"]
-        ax2.plot(df_original["alpha"], ld_original,
-                 label=f"Original (M={case.reference_mach:.2f})", linewidth=1.4, linestyle="--")
-        ax2.plot(df_corrected["alpha"], df_corrected["ld_corrected"],
-                 label=f"Corrected (M={case.target_mach:.2f})", linewidth=1.6)
-        ax2.set_xlabel(r"$\alpha$ [deg]")
-        ax2.set_ylabel(r"$C_L/C_D$")
-        ax2.set_title(f"Efficiency $C_L/C_D$ vs $\\alpha$ – {case.flight_condition}")
-        ax2.legend(loc="lower right")
+        with apply_style():
+            fig, (ax_cl, ax_eff) = plt.subplots(2, 1, figsize=(6.5, 8.0),
+                                                  gridspec_kw={"hspace": 0.35})
 
-        fig.tight_layout()
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
+            alpha = df_original["alpha"]
+
+            # ── CL vs α ──────────────────────────────────────────────────────
+            ax_cl.plot(alpha, df_original["cl"],
+                       color="#BBBBBB", linewidth=1.4, linestyle="--",
+                       label=f"XFOIL  M = {case.reference_mach:.2f}")
+            ax_cl.plot(alpha, df_corrected["cl_pg"],
+                       color=color, linewidth=1.6, linestyle="--",
+                       label=f"Prandtl-Glauert  M = {case.target_mach:.2f}")
+            ax_cl.plot(alpha, df_corrected["cl_kt"],
+                       color=color, linewidth=2.2,
+                       label=f"Kármán-Tsien  M = {case.target_mach:.2f}")
+
+            # Mcr annotation
+            mcr_label = (f"$M_{{cr}}$ ≈ {mcr:.3f}"
+                         + ("  ⚠ supercrítico" if is_supercritical else ""))
+            ax_cl.axvline(0, color="none")  # placeholder
+            ax_cl.annotate(
+                mcr_label,
+                xy=(0.97, 0.05), xycoords="axes fraction",
+                ha="right", fontsize=8,
+                color="#E53935" if is_supercritical else "#228833",
+                bbox=dict(boxstyle="round,pad=0.3",
+                          facecolor="#FFEBEE" if is_supercritical else "#E8F5E9",
+                          edgecolor="none", alpha=0.9),
+            )
+
+            ax_cl.set_xlabel(r"$\alpha$ [°]")
+            ax_cl.set_ylabel(r"$C_L$")
+            ax_cl.set_title(
+                f"Corrección de compresibilidad — {flight_label} / {section_label}"
+            )
+            ax_cl.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
+
+            # ── CL/CD vs α ───────────────────────────────────────────────────
+            ld_orig = df_original["cl"] / df_original["cd"]
+            ax_eff.plot(alpha, ld_orig,
+                        color="#BBBBBB", linewidth=1.4, linestyle="--",
+                        label=f"XFOIL  M = {case.reference_mach:.2f}")
+            ax_eff.plot(alpha, df_corrected["ld_pg"],
+                        color=color, linewidth=1.6, linestyle="--",
+                        label=f"Prandtl-Glauert  M = {case.target_mach:.2f}")
+            ax_eff.plot(alpha, df_corrected["ld_kt"],
+                        color=color, linewidth=2.2,
+                        label=f"Kármán-Tsien  M = {case.target_mach:.2f}")
+
+            ax_eff.set_xlabel(r"$\alpha$ [°]")
+            ax_eff.set_ylabel(r"$C_L / C_D$")
+            ax_eff.set_title(r"Eficiencia aerodinámica $C_L/C_D$")
+            ax_eff.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
+
+            fig.savefig(output_path, bbox_inches="tight")
+            plt.close(fig)

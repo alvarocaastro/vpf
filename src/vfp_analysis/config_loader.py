@@ -139,6 +139,18 @@ def get_blade_sections() -> list[str]:
     return cfg["blade_sections"]
 
 
+def get_airfoil_thickness_ratio() -> float:
+    """Get airfoil thickness ratio t/c for compressibility corrections."""
+    cfg = load_config()
+    return float(cfg["airfoil_geometry"]["thickness_ratio"])
+
+
+def get_korn_kappa() -> float:
+    """Get Korn's equation kappa factor for drag divergence estimation."""
+    cfg = load_config()
+    return float(cfg["airfoil_geometry"]["korn_kappa"])
+
+
 def get_fan_rpm() -> float:
     """Get fan design rotational speed [RPM]."""
     cfg = load_config()

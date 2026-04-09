@@ -34,6 +34,9 @@ from vfp_analysis.adapters.xfoil.xfoil_runner_adapter import XfoilRunnerAdapter
 from vfp_analysis.stage3_compressibility_correction.adapters.correction_models.prandtl_glauert_model import (
     PrandtlGlauertModel,
 )
+from vfp_analysis.stage3_compressibility_correction.adapters.correction_models.karman_tsien_model import (
+    KarmanTsienModel,
+)
 from vfp_analysis.stage3_compressibility_correction.core.domain.compressibility_case import (
     CompressibilityCase,
 )
@@ -53,6 +56,8 @@ from vfp_analysis.config_loader import (
     get_selection_alpha_range,
     get_selection_ncrit,
     get_selection_reynolds,
+    get_airfoil_thickness_ratio,
+    get_korn_kappa,
     get_target_mach,
 )
 from vfp_analysis.core.domain.airfoil import Airfoil
@@ -286,9 +291,14 @@ def step_4_compressibility_correction(source_polars: Path) -> None:
     blade_sections = get_blade_sections()
     target_mach = get_target_mach()
 
-    model = PrandtlGlauertModel()
-    service = CompressibilityCorrectionService(
-        correction_model=model,
+    tc    = get_airfoil_thickness_ratio()
+    kappa = get_korn_kappa()
+
+    pg_model = PrandtlGlauertModel()
+    kt_model = KarmanTsienModel(thickness_ratio=tc, korn_kappa=kappa)
+    service  = CompressibilityCorrectionService(
+        pg_model=pg_model,
+        kt_model=kt_model,
         base_output_dir=stage3_dir,
     )
 
@@ -306,14 +316,14 @@ def step_4_compressibility_correction(source_polars: Path) -> None:
                 LOGGER.warning(f"Polar not found: {polar_path}")
                 continue
 
-            LOGGER.info(f"Correcting {flight}/{section} (M={mach:.2f})")
+            LOGGER.info(f"Correcting {flight}/{section} (M={mach:.2f})  [PG + K-T]")
             try:
                 service.correct_case(case, polar_path, section)
             except Exception as e:
                 LOGGER.warning(f"Failed to correct {flight}/{section}: {e}")
                 continue
 
-    LOGGER.info("Compressibility corrections completed.")
+    LOGGER.info("Compressibility corrections completed (PG + Kármán-Tsien + wave drag).")
     
     # Generate Stage 3 summary
     summary_text = generate_stage3_summary(stage3_dir)

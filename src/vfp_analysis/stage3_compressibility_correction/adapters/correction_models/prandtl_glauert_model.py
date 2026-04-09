@@ -72,19 +72,22 @@ class PrandtlGlauertModel:
         df_corrected = df.copy()
 
         # Correct lift coefficient (Prandtl–Glauert applies to lift/pressure)
-        df_corrected["cl_corrected"] = df["cl"] * correction_factor
+        df_corrected["cl_pg"] = df["cl"] * correction_factor
 
-        # Drag: keep original or handle separately (not corrected by PG)
-        # Documented that drag correction is more complex
-        df_corrected["cd_original"] = df["cd"]
-        df_corrected["cd_corrected"] = df["cd"]  # No correction applied
+        # Correct pitching moment (same PG factor as CL — both arise from pressure)
+        if "cm" in df.columns:
+            df_corrected["cm_pg"] = df["cm"] * correction_factor
 
-        # Corrected efficiency
-        df_corrected["ld_corrected"] = (
-            df_corrected["cl_corrected"] / df_corrected["cd_corrected"]
+        # Drag: PG has no drag correction — wave drag added by KarmanTsienModel
+        # Keep original CD here; KarmanTsienModel will overwrite cd_corrected
+        df_corrected["cd_corrected"] = df["cd"]
+
+        # Corrected efficiency (PG CL / original CD — updated later by K-T)
+        df_corrected["ld_pg"] = (
+            df_corrected["cl_pg"] / df_corrected["cd_corrected"]
         )
 
         # Store corrected Mach
-        df_corrected["mach_corrected"] = case.target_mach
+        df_corrected["mach_target"] = case.target_mach
 
         return df_corrected

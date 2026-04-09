@@ -99,6 +99,11 @@ blade_sections:
   - mid_span
   - tip
 
+# Airfoil geometry parameters for compressibility corrections
+airfoil_geometry:
+  thickness_ratio: 0.10   # t/c — NACA 65-410 (10% thick)
+  korn_kappa: 0.87        # Korn's equation factor for NACA 6-series conventional airfoils
+
 # Fan geometry (hypothetical reference fan for velocity triangle analysis)
 fan_geometry:
   rpm: 4500               # Design rotational speed [RPM]
