@@ -49,8 +49,10 @@ env/
 *.bcf
 *.run.xml
 
-# Results
-results/
+# Results — ignorar contenido pero mantener estructura de carpetas
+results/**
+!results/**/
+!results/**/.gitkeep
 
 # Temporary files
 *.tmp
