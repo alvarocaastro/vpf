@@ -122,8 +122,8 @@ def _fig_cascade_solidity(cascade: List[CascadeResult], figures_dir: Path) -> No
 
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
     ax.axhspan(0.0, 0.5,  alpha=0.12, color="#4CAF50", label="Isolated airfoil (σ < 0.5)")
-    ax.axhspan(0.5, 1.0,  alpha=0.12, color="#FF9800", label="Moderate cascade (0.5–1.0)")
-    ax.axhspan(1.0, 3.0,  alpha=0.12, color="#F44336", label="High solidity (σ > 1.0)")
+    ax.axhspan(0.5, 1.5,  alpha=0.12, color="#FF9800", label="Moderate cascade (0.5–1.5)")
+    ax.axhspan(1.5, 5.0,  alpha=0.12, color="#F44336", label="High solidity — wide-chord (σ > 1.5)")
 
     for res in cascade:
         ax.scatter(res.radius_m, res.solidity,
