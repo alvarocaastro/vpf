@@ -11,6 +11,7 @@ from typing import List
 
 from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
     EPSILON_CAP,
+    MissionSummary,
     SfcAnalysisResult,
     SfcSectionResult,
 )
@@ -19,6 +20,7 @@ from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
 def generate_sfc_summary(
     sfc_results: List[SfcAnalysisResult],
     section_results: List[SfcSectionResult] | None = None,
+    mission_summary: MissionSummary | None = None,
 ) -> str:
     """Genera un resumen legible de los resultados del análisis de SFC."""
     lines = []
@@ -209,6 +211,43 @@ def generate_sfc_summary(
     lines.append("  [5] Dickens, T. & Day, I. (2011). The Design of Highly Loaded Axial")
     lines.append("      Compressors. J. Turbomachinery, 133(3):031007.")
     lines.append("")
+
+    # ── 7. Misión — ahorro total de combustible ───────────────────────────
+    if mission_summary is not None and mission_summary.total_fuel_baseline_kg > 0:
+        lines.append("-" * 70)
+        lines.append("7. MISIÓN — AHORRO TOTAL DE COMBUSTIBLE")
+        lines.append("-" * 70)
+        lines.append("")
+        lines.append("  Modelo: fuel_phase = SFC(phase) × thrust_lbf × duration_hr × 0.453592")
+        lines.append("  Ref: CORSIA (2022) — factor CO₂/kerosene = 3.16 kg/kg")
+        lines.append("")
+        header_m = (
+            f"  {'Fase':<10}  {'Dur [min]':>9}  {'Emp [kN]':>8}  "
+            f"{'Fuel base [kg]':>14}  {'Fuel VPF [kg]':>13}  "
+            f"{'Ahorro [kg]':>11}  {'CO₂ [kg]':>9}  {'Coste [$]':>9}"
+        )
+        lines.append(header_m)
+        lines.append("  " + "-" * 94)
+        for p in mission_summary.phase_results:
+            lines.append(
+                f"  {p.phase:<10}  {p.duration_min:>9.1f}  {p.thrust_kN:>8.1f}  "
+                f"{p.fuel_baseline_kg:>14.1f}  {p.fuel_vpf_kg:>13.1f}  "
+                f"{p.fuel_saving_kg:>11.1f}  {p.co2_saving_kg:>9.1f}  "
+                f"{p.cost_saving_usd:>9.2f}"
+            )
+        lines.append("  " + "-" * 94)
+        lines.append(
+            f"  {'TOTAL':<10}  {'':>9}  {'':>8}  "
+            f"{mission_summary.total_fuel_baseline_kg:>14.1f}  "
+            f"{mission_summary.total_fuel_vpf_kg:>13.1f}  "
+            f"{mission_summary.total_fuel_saving_kg:>11.1f}  "
+            f"{mission_summary.total_co2_saving_kg:>9.1f}  "
+            f"{mission_summary.total_cost_saving_usd:>9.2f}"
+        )
+        lines.append("")
+        lines.append(f"  Ahorro relativo por misión: {mission_summary.total_fuel_saving_pct:.2f}%")
+        lines.append("")
+
     lines.append("=" * 70)
 
     return "\n".join(lines)

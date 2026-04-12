@@ -14,12 +14,14 @@ Outputs (en results/stage6_sfc_analysis/):
     tables/sfc_section_breakdown.csv     — ε, Δη por condición × sección
     tables/sfc_analysis.csv              — resultados agregados por condición
     tables/sfc_sensitivity.csv           — barrido de τ × condición
+    tables/mission_fuel_burn.csv         — ahorro de combustible por fase de misión
     figures/fixed_vs_vpf_efficiency.png    — CL/CD_fixed vs CL/CD_vpf por sección
     figures/epsilon_spanwise.png           — ε_eff(r) capeado por sección y condición
     figures/sfc_sensitivity_tau.png        — sensibilidad de ΔSFC a τ
     figures/sfc_combined.png               — SFC base/VPF (izq.) + % reducción (der.)
     figures/fan_efficiency_improvement.png — η_fan base vs VPF por condición
     figures/efficiency_mechanism_breakdown.png — desglose Δη perfil vs mapa por condición
+    figures/mission_fuel_burn.png          — ahorro de combustible, CO₂ y coste por fase
     sfc_analysis_summary.txt
     finalresults_stage6.txt
 """
@@ -45,9 +47,14 @@ from vfp_analysis.shared.plot_style import (
 )
 from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
     EngineBaseline,
+    MissionFuelBurnResult,
+    MissionSummary,
     SfcAnalysisResult,
     SfcSectionResult,
     SfcSensitivityPoint,
+)
+from vfp_analysis.stage6_sfc_analysis.core.services.mission_analysis_service import (
+    compute_mission_fuel_burn,
 )
 from vfp_analysis.stage6_sfc_analysis.core.services.sfc_analysis_service import (
     compute_sfc_analysis,
@@ -75,8 +82,10 @@ def generate_sfc_figures(
     section_results: List[SfcSectionResult],
     sensitivity_results: List[SfcSensitivityPoint],
     figures_dir: Path,
+    mission_phase_results: List[MissionFuelBurnResult] | None = None,
+    mission_summary: MissionSummary | None = None,
 ) -> None:
-    """Genera las seis figuras del análisis SFC."""
+    """Genera las figuras del análisis SFC."""
     figures_dir.mkdir(parents=True, exist_ok=True)
     with apply_style():
         _plot_fixed_vs_vpf_efficiency(section_results, figures_dir)
@@ -85,6 +94,8 @@ def generate_sfc_figures(
         _plot_sfc_combined(sfc_results, figures_dir)
         _plot_fan_efficiency_improvement(sfc_results, figures_dir)
         _plot_efficiency_mechanism_breakdown(sfc_results, figures_dir)
+        if mission_phase_results and mission_summary:
+            _plot_mission_fuel_burn(mission_phase_results, mission_summary, figures_dir)
 
 
 def _plot_fixed_vs_vpf_efficiency(
@@ -473,6 +484,104 @@ def _write_sensitivity_table(
     df.to_csv(output_path, index=False, float_format="%.6f")
 
 
+def _plot_mission_fuel_burn(
+    phase_results: List[MissionFuelBurnResult],
+    summary: MissionSummary,
+    figures_dir: Path,
+) -> None:
+    """Figura de dos paneles: ahorro de combustible y CO₂ por fase + totales."""
+    phases = [p.phase for p in phase_results]
+    x = np.arange(len(phases))
+    phase_labels = [p.title() for p in phases]
+
+    cond_colors = {
+        "takeoff": "#E31A1C",
+        "climb":   "#FF7F00",
+        "cruise":  "#1F78B4",
+        "descent": "#6A3D9A",
+    }
+    bar_colors = [cond_colors.get(p.phase, "#888888") for p in phase_results]
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig.suptitle("Integración de Misión — Ahorro de Combustible con VPF", fontsize=11)
+
+    # Panel izquierdo: combustible baseline vs ahorro (apilado)
+    ax = axes[0]
+    fuel_vpf = [p.fuel_vpf_kg for p in phase_results]
+    fuel_save = [p.fuel_saving_kg for p in phase_results]
+    ax.bar(x, fuel_vpf, color=bar_colors, alpha=0.85, edgecolor="white",
+           linewidth=0.6, zorder=3, label="Combustible con VPF")
+    ax.bar(x, fuel_save, bottom=fuel_vpf, color=bar_colors, alpha=0.35,
+           edgecolor=[cond_colors.get(p.phase, "#888888") for p in phase_results],
+           linewidth=0.8, hatch="///", zorder=3, label="Ahorro VPF")
+    for xi, p in zip(x, phase_results):
+        if p.fuel_saving_kg > 0.1:
+            ax.text(xi, p.fuel_vpf_kg + p.fuel_saving_kg + 0.5,
+                    f"−{p.fuel_saving_kg:.1f} kg", ha="center", va="bottom",
+                    fontsize=7.5, color="#333333")
+    ax.set_xticks(x)
+    ax.set_xticklabels(phase_labels)
+    ax.set_ylabel("Combustible quemado [kg]")
+    ax.set_title("Consumo por fase", fontsize=9)
+    ax.grid(axis="y", linewidth=0.4, zorder=0)
+    ax.set_axisbelow(True)
+    ax.legend(fontsize=8, loc="upper right")
+
+    # Panel derecho: CO₂ ahorrado por fase + tabla de totales
+    ax2 = axes[1]
+    co2 = [p.co2_saving_kg for p in phase_results]
+    ax2.bar(x, co2, color=bar_colors, alpha=0.85, edgecolor="white",
+            linewidth=0.6, zorder=3)
+    for xi, val in zip(x, co2):
+        if val > 0.1:
+            ax2.text(xi, val + 0.3, f"{val:.1f}", ha="center", va="bottom",
+                     fontsize=7.5, color="#333333")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(phase_labels)
+    ax2.set_ylabel("CO₂ ahorrado [kg]")
+    ax2.set_title("Reducción de emisiones CO₂ por fase", fontsize=9)
+    ax2.grid(axis="y", linewidth=0.4, zorder=0)
+    ax2.set_axisbelow(True)
+
+    # Anotación de totales
+    totals_text = (
+        f"MISIÓN COMPLETA\n"
+        f"Ahorro combustible: {summary.total_fuel_saving_kg:.1f} kg  "
+        f"({summary.total_fuel_saving_pct:.2f}%)\n"
+        f"Ahorro CO₂: {summary.total_co2_saving_kg:.1f} kg\n"
+        f"Ahorro económico: ${summary.total_cost_saving_usd:.0f} por vuelo"
+    )
+    fig.text(0.5, -0.01, totals_text, ha="center", va="top", fontsize=9,
+             bbox=dict(boxstyle="round,pad=0.4", facecolor="#f0f4f8", edgecolor="#cccccc"))
+
+    fig.tight_layout(rect=[0, 0.12, 1, 1])
+    fig.savefig(figures_dir / "mission_fuel_burn.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _write_mission_table(
+    phase_results: List[MissionFuelBurnResult],
+    output_path: Path,
+) -> None:
+    rows = [
+        {
+            "phase":              p.phase,
+            "duration_min":       p.duration_min,
+            "thrust_kN":          p.thrust_kN,
+            "sfc_baseline":       p.sfc_baseline,
+            "sfc_vpf":            p.sfc_vpf,
+            "fuel_baseline_kg":   p.fuel_baseline_kg,
+            "fuel_vpf_kg":        p.fuel_vpf_kg,
+            "fuel_saving_kg":     p.fuel_saving_kg,
+            "co2_saving_kg":      p.co2_saving_kg,
+            "cost_saving_usd":    p.cost_saving_usd,
+        }
+        for p in phase_results
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(output_path, index=False, float_format="%.4f")
+
+
 # ---------------------------------------------------------------------------
 # Punto de entrada
 # ---------------------------------------------------------------------------
@@ -539,16 +648,41 @@ def run_sfc_analysis() -> None:
     )
     LOGGER.info("Sensibilidad: %d puntos (τ × condición)", len(sensitivity_results))
 
-    # ── 5. Figuras ───────────────────────────────────────────────────────
-    generate_sfc_figures(sfc_results, section_results, sensitivity_results, figures_dir)
+    # ── 5. Análisis de misión ────────────────────────────────────────────
+    try:
+        from vfp_analysis.config_loader import get_mission_profile
+        mission_profile = get_mission_profile()
+        mission_summary, mission_phase_results = compute_mission_fuel_burn(
+            sfc_results, mission_profile,
+        )
+        LOGGER.info(
+            "Misión: ahorro=%.1f kg (%.2f%%), CO₂=%.1f kg, coste=$%.0f",
+            mission_summary.total_fuel_saving_kg,
+            mission_summary.total_fuel_saving_pct,
+            mission_summary.total_co2_saving_kg,
+            mission_summary.total_cost_saving_usd,
+        )
+    except Exception as exc:
+        LOGGER.warning("Análisis de misión no disponible: %s", exc)
+        mission_summary = None
+        mission_phase_results = []
 
-    # ── 6. Tablas ────────────────────────────────────────────────────────
+    # ── 6. Figuras ───────────────────────────────────────────────────────
+    generate_sfc_figures(
+        sfc_results, section_results, sensitivity_results, figures_dir,
+        mission_phase_results=mission_phase_results or None,
+        mission_summary=mission_summary,
+    )
+
+    # ── 7. Tablas ────────────────────────────────────────────────────────
     _write_section_table(section_results, tables_dir / "sfc_section_breakdown.csv")
     _write_sfc_table(sfc_results,         tables_dir / "sfc_analysis.csv")
     _write_sensitivity_table(sensitivity_results, tables_dir / "sfc_sensitivity.csv")
+    if mission_phase_results:
+        _write_mission_table(mission_phase_results, tables_dir / "mission_fuel_burn.csv")
 
-    # ── 7. Resúmenes de texto ────────────────────────────────────────────
-    summary_text = generate_sfc_summary(sfc_results, section_results)
+    # ── 8. Resúmenes de texto ────────────────────────────────────────────
+    summary_text = generate_sfc_summary(sfc_results, section_results, mission_summary=mission_summary)
     (stage6_dir / "sfc_analysis_summary.txt").write_text(summary_text, encoding="utf-8")
 
     from vfp_analysis.postprocessing.stage_summary_generator import (

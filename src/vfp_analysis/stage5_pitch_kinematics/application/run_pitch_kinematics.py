@@ -76,9 +76,11 @@ from vfp_analysis.stage5_pitch_kinematics.core.services.pitch_adjustment_service
     compute_pitch_adjustments,
 )
 from vfp_analysis.stage5_pitch_kinematics.core.services.rotational_correction_service import (
+    DuSeligCorrectionResult,
     RotationalCorrectionResult,
     build_3d_polar_map,
     compute_rotational_corrections,
+    compute_rotational_corrections_du_selig,
 )
 from vfp_analysis.stage5_pitch_kinematics.core.services.stage_loading_service import (
     StageLoadingResult,
@@ -819,6 +821,98 @@ def _write_rotational_table(rot: List[RotationalCorrectionResult], path: Path) -
     )
 
 
+def _write_du_selig_table(ds: List[DuSeligCorrectionResult], path: Path) -> None:
+    rows = [
+        {
+            "condition":              r.condition,
+            "section":                r.section,
+            "radius_m":               r.radius_m,
+            "chord_m":                r.chord_m,
+            "c_over_r":               r.c_over_r,
+            "lambda_r":               r.lambda_r,
+            "du_selig_factor":        r.du_selig_factor,
+            "alpha_opt_2D_deg":       r.alpha_opt_2d,
+            "CL_CD_max_2D":           r.cl_cd_max_2d,
+            "alpha_opt_3D_ds_deg":    r.alpha_opt_3d,
+            "CL_CD_max_3D_ds":        r.cl_cd_max_3d,
+            "delta_CL_du_selig":      r.delta_cl_du_selig_at_opt,
+            "CL_gain_pct_ds":         r.cl_gain_pct,
+        }
+        for r in ds
+    ]
+    pd.DataFrame(rows).sort_values(["condition", "section"]).to_csv(
+        path, index=False, float_format="%.6f"
+    )
+
+
+def _fig_rotational_model_comparison(
+    rot_snel: List[RotationalCorrectionResult],
+    rot_ds: List[DuSeligCorrectionResult],
+    figures_dir: Path,
+) -> None:
+    """Comparación Snel vs Du-Selig: α_opt_3D y CL/CD_max por sección y condición."""
+    apply_style()
+    conds = _ordered_conditions(set(r.condition for r in rot_snel))
+    sections = [s for s in BLADE_SECTIONS if s in set(r.section for r in rot_snel)]
+    cc = _cond_colors()
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig.suptitle("Correcciones Rotacionales 3D — Snel vs Du-Selig (2000)", fontsize=11)
+
+    x = np.arange(len(conds))
+    n_sec = len(sections)
+    width = 0.35 / n_sec
+
+    for ax, metric, ylabel, title in zip(
+        axes,
+        ["alpha_opt_3d", "cl_cd_max_3d"],
+        ["α_opt,3D [°]", "(CL/CD)_max,3D [—]"],
+        ["Ángulo óptimo de incidencia 3D", "CL/CD máximo 3D"],
+    ):
+        for i, section in enumerate(sections):
+            offset = (i - n_sec / 2 + 0.5) * width * 2.4
+            # Snel
+            vals_snel = [
+                next((r.alpha_opt_3d if metric == "alpha_opt_3d" else r.cl_cd_max_3d
+                      for r in rot_snel if r.condition == c and r.section == section),
+                     float("nan"))
+                for c in conds
+            ]
+            # Du-Selig
+            vals_ds = [
+                next((r.alpha_opt_3d if metric == "alpha_opt_3d" else r.cl_cd_max_3d
+                      for r in rot_ds if r.condition == c and r.section == section),
+                     float("nan"))
+                for c in conds
+            ]
+            col = list(cc.values())[i % len(cc)]
+            ax.bar(x + offset - width * 0.55, vals_snel, width, label=f"Snel/{section}" if i == 0 else f"_snel_{section}",
+                   color=col, alpha=0.85, edgecolor="white", linewidth=0.5, zorder=3)
+            ax.bar(x + offset + width * 0.55, vals_ds, width, label=f"DS/{section}" if i == 0 else f"_ds_{section}",
+                   color=col, alpha=0.45, edgecolor=col, linewidth=0.8, linestyle="--", zorder=3)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([c.title() for c in conds])
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=9)
+        ax.grid(axis="y", linewidth=0.4, zorder=0)
+        ax.set_axisbelow(True)
+
+    # Leyenda manual simplificada
+    from matplotlib.patches import Patch
+    legend_elements = []
+    for i, sec in enumerate(sections):
+        col = list(cc.values())[i % len(cc)]
+        legend_elements.append(Patch(facecolor=col, alpha=0.85, label=f"Snel/{sec}"))
+        legend_elements.append(Patch(facecolor=col, alpha=0.45, edgecolor=col, label=f"Du-Selig/{sec}"))
+    fig.legend(handles=legend_elements, loc="lower center", ncol=min(6, len(legend_elements)),
+               fontsize=7.5, frameon=True, bbox_to_anchor=(0.5, -0.04))
+
+    fig.tight_layout(rect=[0, 0.06, 1, 1])
+    fig.savefig(figures_dir / "rotational_model_comparison.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _write_twist_table(twist: List[TwistDesignResult], path: Path) -> None:
     rows = [
         {
@@ -953,13 +1047,19 @@ def run_pitch_kinematics() -> None:
         df_cascade_list.append(apply_weinig_to_polar(df_sec.copy(), k, cl_col_work))
     df_cascade = pd.concat(df_cascade_list, ignore_index=True)
 
-    # ── 4. [B] Correcciones rotacionales 3D (Snel) ───────────────────────────
+    # ── 4. [B] Correcciones rotacionales 3D (Snel + Du-Selig) ────────────────
     LOGGER.info("[B] Calculando correcciones rotacionales 3D (Snel)...")
     rot_results = compute_rotational_corrections(
         df_cascade, blade_geom, alpha_opt_2d_map, cl_cd_max_2d_map,
     )
     polar_3d_map = build_3d_polar_map(df_cascade, blade_geom)
     LOGGER.info("Correcciones 3D calculadas: %d casos", len(rot_results))
+
+    LOGGER.info("[B2] Calculando correcciones rotacionales 3D (Du-Selig 2000)...")
+    rot_ds_results = compute_rotational_corrections_du_selig(
+        df_cascade, blade_geom, alpha_opt_2d_map, cl_cd_max_2d_map,
+    )
+    LOGGER.info("Du-Selig calculado: %d casos", len(rot_ds_results))
 
     # ── 5. Incidencia óptima 3D ──────────────────────────────────────────────
     LOGGER.info("Calculando incidencias óptimas 3D...")
@@ -1035,9 +1135,10 @@ def run_pitch_kinematics() -> None:
     _fig_cascade_cl_correction(cascade_results, figures_dir)
     _fig_deviation_carter(cascade_results, figures_dir)
 
-    # Snel
+    # Snel + Du-Selig
     _fig_polars_2d_vs_3d_root(df_work, polar_3d_map, figures_dir)
     _fig_snel_correction_spanwise(rot_results, figures_dir)
+    _fig_rotational_model_comparison(rot_results, rot_ds_results, figures_dir)
 
     # Twist + off-design
     _fig_blade_twist_profile(twist_results, figures_dir)
@@ -1076,6 +1177,7 @@ def run_pitch_kinematics() -> None:
     LOGGER.info("Escribiendo tablas CSV...")
     _write_cascade_table(cascade_results, tables_dir / "cascade_corrections.csv")
     _write_rotational_table(rot_results,  tables_dir / "rotational_corrections.csv")
+    _write_du_selig_table(rot_ds_results, tables_dir / "rotational_corrections_du_selig.csv")
     _write_twist_table(twist_results,     tables_dir / "blade_twist_design.csv")
     _write_off_design_table(off_design_results, tables_dir / "off_design_incidence.csv")
     _write_stage_loading_table(loading_results, tables_dir / "stage_loading.csv")

@@ -32,3 +32,22 @@ sfc_multipliers:
 # Fraction of 2D profile efficiency gain that translates to 3D fan efficiency
 # (Accounts for 3D losses like tip clearance, secondary flows, shockwaves)
 profile_efficiency_transfer: 0.65
+
+# ---------------------------------------------------------
+# MISSION PROFILE (for total fuel burn integration)
+# ---------------------------------------------------------
+# Reference mission: B777X medium-haul (~8.8 h block time)
+# thrust_fraction: fraction of sea-level static thrust at each phase
+# duration_min: typical phase duration [minutes]
+
+mission:
+  phases:
+    takeoff:  {duration_min:   0.5, thrust_fraction: 1.00}
+    climb:    {duration_min:  20.0, thrust_fraction: 0.75}
+    cruise:   {duration_min: 480.0, thrust_fraction: 0.25}
+    descent:  {duration_min:  25.0, thrust_fraction: 0.05}
+  # GE9X-1B sea-level static thrust per engine [kN]
+  # Ref: GE Aviation GE9X product spec (2023)
+  design_thrust_kN: 105.0
+  # Jet-A1 price [USD/kg] — IATA average 2023-2024
+  fuel_price_usd_per_kg: 0.90

@@ -186,6 +186,30 @@ def get_blade_geometry() -> Dict[str, Any]:
     }
 
 
+def get_mission_profile() -> Dict[str, Any]:
+    """Get mission profile parameters from engine_parameters.yaml.
+
+    Returns a dict with:
+        phases (dict): {condition: {duration_min, thrust_fraction}}
+        design_thrust_kN (float): sea-level static thrust per engine [kN]
+        fuel_price_usd_per_kg (float): jet-A1 price [USD/kg]
+    """
+    import yaml as _yaml
+    engine_cfg_path = base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
+    with engine_cfg_path.open("r", encoding="utf-8") as f:
+        cfg = _yaml.safe_load(f)
+    mission = cfg.get("mission", {})
+    return {
+        "phases": {
+            k: {"duration_min": float(v["duration_min"]),
+                "thrust_fraction": float(v["thrust_fraction"])}
+            for k, v in mission.get("phases", {}).items()
+        },
+        "design_thrust_kN": float(mission.get("design_thrust_kN", 105.0)),
+        "fuel_price_usd_per_kg": float(mission.get("fuel_price_usd_per_kg", 0.90)),
+    }
+
+
 def clear_cache() -> None:
     """Clear the configuration cache (useful for testing)."""
     global _CONFIG_CACHE

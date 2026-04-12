@@ -144,6 +144,39 @@ class SfcSectionResult:
 # Resultados de sensibilidad a τ
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Resultados de integración de misión
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class MissionFuelBurnResult:
+    """Consumo de combustible y ahorro VPF para una fase de vuelo."""
+
+    phase: str
+    duration_min: float           # Duración de la fase [min]
+    thrust_kN: float              # Empuje en la fase (design_thrust × thrust_fraction) [kN]
+    sfc_baseline: float           # SFC sin VPF para esta fase [lb/(lbf·hr)]
+    sfc_vpf: float                # SFC con VPF para esta fase [lb/(lbf·hr)]
+    fuel_baseline_kg: float       # Combustible quemado sin VPF [kg]
+    fuel_vpf_kg: float            # Combustible quemado con VPF [kg]
+    fuel_saving_kg: float         # Ahorro de combustible (baseline − vpf) [kg]
+    co2_saving_kg: float          # Ahorro en CO₂ (factor CORSIA 3.16 kg CO₂/kg fuel) [kg]
+    cost_saving_usd: float        # Ahorro económico [USD]
+
+
+@dataclass(frozen=True)
+class MissionSummary:
+    """Resumen agregado del ahorro de combustible en misión completa."""
+
+    total_fuel_baseline_kg: float    # Total combustible sin VPF [kg]
+    total_fuel_vpf_kg: float         # Total combustible con VPF [kg]
+    total_fuel_saving_kg: float      # Total ahorro [kg]
+    total_fuel_saving_pct: float     # Ahorro relativo [%]
+    total_co2_saving_kg: float       # Total CO₂ ahorrado [kg]
+    total_cost_saving_usd: float     # Total ahorro económico [USD]
+    phase_results: list              # List[MissionFuelBurnResult]
+
+
 @dataclass(frozen=True)
 class SfcSensitivityPoint:
     """Un punto del barrido de sensibilidad sobre el coeficiente τ."""
