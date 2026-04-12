@@ -48,8 +48,6 @@ class EngineBaseline:
     baseline_sfc: float      # SFC de crucero base [lb/(lbf·hr)]
     fan_efficiency: float    # Eficiencia isentrópica de fan base [0–1]
     bypass_ratio: float      # Relación de derivación (bypass ratio)
-    cruise_velocity: float   # Velocidad de crucero [m/s]
-    jet_velocity: float      # Velocidad de salida del chorro [m/s]
 
 
 # ---------------------------------------------------------------------------

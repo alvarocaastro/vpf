@@ -549,7 +549,7 @@ def _fig_loading_profile_spanwise(
     figures_dir: Path,
 ) -> None:
     """ψ(r) en crucero vs takeoff vs climb — perfil radial de carga."""
-    radii_map = {"root": 0.20, "mid_span": 0.42, "tip": 0.65}
+    radii_map = get_blade_radii()
     conds_to_plot = [c for c in ["cruise", "climb", "takeoff"] if c in set(r.condition for r in loading)]
 
     fig, ax = plt.subplots(figsize=(6.5, 5.0))

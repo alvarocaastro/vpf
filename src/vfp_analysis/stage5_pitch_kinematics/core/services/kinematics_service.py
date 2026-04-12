@@ -10,12 +10,9 @@ Para cada (condición, sección):
     β     = α_opt_3D + φ                                 # ángulo de paso mecánico [°]
     Δβ    = β(condición) − β(crucero)                    # ajuste respecto a referencia [°]
 
-NOTA: La velocidad axial Va se lee directamente de engine_parameters.yaml
-(sección kinematics.axial_velocity_m_s) para mantener coherencia con
-analysis_config.yaml (fan_geometry.axial_velocity). NO se deriva de Mach × a.
-
-El resultado conecta la aerodinámica 3D (α_opt_3D) con el comando real
-del actuador de paso de la pala variable.
+Fuente única de verdad: analysis_config.yaml (sección fan_geometry).
+Va, radios y RPM se leen de ahí mediante config_loader para evitar duplicación
+con engine_parameters.yaml.
 """
 
 from __future__ import annotations
@@ -24,8 +21,7 @@ import math
 from pathlib import Path
 from typing import Dict, List
 
-import yaml
-
+from vfp_analysis.config_loader import get_axial_velocities, get_blade_radii, get_fan_rpm
 from vfp_analysis.stage5_pitch_kinematics.core.domain.pitch_kinematics_result import (
     KinematicsResult,
     PitchAdjustment,
@@ -45,7 +41,8 @@ def compute_kinematics(
     pitch_adjustments : List[PitchAdjustment]
         Ajustes de paso aerodinámico de pitch_adjustment_service.
     engine_config_path : Path
-        Ruta a engine_parameters.yaml (sección ``kinematics``).
+        Ignorado — mantenido por compatibilidad de firma. Los parámetros
+        geométricos se leen de analysis_config.yaml (fuente única).
     reference_condition : str
         Condición de referencia para calcular Δβ.
 
@@ -53,14 +50,10 @@ def compute_kinematics(
     -------
     List[KinematicsResult]
     """
-    with engine_config_path.open("r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-
-    kin      = config.get("kinematics", {})
-    rpm      = kin.get("fan_rpm", 4500.0)
-    radii    = kin.get("radii_m", {})
-    va_dict  = kin.get("axial_velocity_m_s", {})   # Va explícita por condición
-    omega    = rpm * (2.0 * math.pi / 60.0)         # [rad/s]
+    rpm     = get_fan_rpm()
+    radii   = get_blade_radii()
+    va_dict = get_axial_velocities()
+    omega   = rpm * (2.0 * math.pi / 60.0)   # [rad/s]
 
     results: List[KinematicsResult] = []
     reference_beta: Dict[str, float] = {}            # section → β_mech_ref

@@ -13,14 +13,6 @@ fan_efficiency: 0.88
 # Typical values: 8-12 for modern high-bypass turbofans
 bypass_ratio: 10.0
 
-# Cruise velocity (m/s)
-# Typical cruise speed for commercial aircraft: ~250 m/s (Mach 0.85 at altitude)
-cruise_velocity: 250.0
-
-# Jet velocity (m/s)
-# Effective jet velocity for high-bypass turbofan
-jet_velocity: 350.0
-
 # Reference flight condition for baseline
 reference_condition: cruise
 
@@ -40,20 +32,3 @@ sfc_multipliers:
 # Fraction of 2D profile efficiency gain that translates to 3D fan efficiency
 # (Accounts for 3D losses like tip clearance, secondary flows, shockwaves)
 profile_efficiency_transfer: 0.65
-
-# Kinematics geometry and velocities
-# IMPORTANT: must match fan_geometry in analysis_config.yaml (single source of truth)
-kinematics:
-  fan_rpm: 4500.0           # Design rotational speed [RPM] — same as analysis_config
-  # Blade section radial positions [m] — same as analysis_config fan_geometry.radius
-  radii_m:
-    root: 0.20
-    mid_span: 0.42
-    tip: 0.65
-  # Axial flow velocity Va [m/s] per flight condition — explicit, not derived from Mach
-  # Same as analysis_config fan_geometry.axial_velocity
-  axial_velocity_m_s:
-    takeoff: 180.0
-    climb:   220.0
-    cruise:  250.0
-    descent: 200.0

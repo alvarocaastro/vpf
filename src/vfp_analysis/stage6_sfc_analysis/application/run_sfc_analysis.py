@@ -413,8 +413,6 @@ def run_sfc_analysis() -> None:
         baseline_sfc=_cfg["baseline_sfc"],
         fan_efficiency=_cfg["fan_efficiency"],
         bypass_ratio=_cfg["bypass_ratio"],
-        cruise_velocity=_cfg["cruise_velocity"],
-        jet_velocity=_cfg["jet_velocity"],
     )
     LOGGER.info(
         "Motor: SFC_base=%.4f, η_fan=%.3f, BPR=%.1f",
