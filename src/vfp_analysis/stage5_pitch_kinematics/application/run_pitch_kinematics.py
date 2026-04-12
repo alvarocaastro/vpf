@@ -87,10 +87,9 @@ from vfp_analysis.stage5_pitch_kinematics.core.services.stage_loading_service im
 
 LOGGER = logging.getLogger(__name__)
 
-_SECTIONS: List[str] = ["root", "mid_span", "tip"]
-_CONDITIONS_ORDER: List[str] = ["takeoff", "climb", "cruise", "descent"]
-
-apply_style()
+# Orden canónico de secciones y condiciones para figuras y tablas
+BLADE_SECTIONS: List[str] = ["root", "mid_span", "tip"]
+FLIGHT_CONDITIONS_ORDER: List[str] = ["takeoff", "climb", "cruise", "descent"]
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +107,7 @@ def _cond_colors() -> Dict[str, str]:
 
 def _ordered_conditions(conditions) -> List[str]:
     present = set(conditions)
-    return [c for c in _CONDITIONS_ORDER if c in present]
+    return [c for c in FLIGHT_CONDITIONS_ORDER if c in present]
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +227,7 @@ def _fig_polars_2d_vs_3d_root(
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
-    for condition in _CONDITIONS_ORDER:
+    for condition in FLIGHT_CONDITIONS_ORDER:
         mask_2d = (df_polars["condition"] == condition) & (df_polars["section"] == "root")
         df_2d = df_polars[mask_2d].sort_values("alpha")
         df_3d = polar_3d_map.get((condition, "root"), pd.DataFrame())
@@ -374,7 +373,7 @@ def _fig_off_design_heatmap(
 ) -> None:
     """Heatmap α_actual(sección × condición) con iso-líneas de α_opt_3D."""
     conds    = _ordered_conditions(set(r.condition for r in off_design))
-    sections = [s for s in _SECTIONS if s in set(r.section for r in off_design)]
+    sections = [s for s in BLADE_SECTIONS if s in set(r.section for r in off_design)]
 
     alpha_actual = np.full((len(sections), len(conds)), float("nan"))
     alpha_opt    = np.full((len(sections), len(conds)), float("nan"))
@@ -422,7 +421,7 @@ def _fig_pitch_compromise_loss(
     """Pérdida de eficiencia por sección × condición (excluye crucero)."""
     non_cruise = [r for r in off_design if r.condition != "cruise"]
     conds    = _ordered_conditions(set(r.condition for r in non_cruise))
-    sections = [s for s in _SECTIONS if s in set(r.section for r in non_cruise)]
+    sections = [s for s in BLADE_SECTIONS if s in set(r.section for r in non_cruise)]
 
     x = np.arange(len(conds))
     width = 0.25
@@ -518,7 +517,7 @@ def _fig_work_distribution(
 ) -> None:
     """W_spec [kJ/kg] por sección × condición."""
     conds    = _ordered_conditions(set(r.condition for r in loading))
-    sections = [s for s in _SECTIONS if s in set(r.section for r in loading)]
+    sections = [s for s in BLADE_SECTIONS if s in set(r.section for r in loading)]
     x        = np.arange(len(conds))
     width    = 0.25
 
@@ -589,7 +588,7 @@ def _fig_efficiency_curves(
     """CL_3D/CD vs α con α_opt_3D marcado, una figura por condición."""
     for condition in _ordered_conditions(df_polars["condition"].unique()):
         fig, ax = plt.subplots(figsize=(7.5, 5.0))
-        for section in _SECTIONS:
+        for section in BLADE_SECTIONS:
             df_3d = polar_3d_map.get((condition, section), pd.DataFrame())
             if df_3d.empty or "ld_3d" not in df_3d.columns:
                 continue
@@ -618,7 +617,7 @@ def _fig_alpha_opt_2d_vs_3d(
 ) -> None:
     """α_opt_2D vs α_opt_3D por caso — muestra la ganancia de las correcciones."""
     conds    = _ordered_conditions(set(r.condition for r in rot_results))
-    sections = [s for s in _SECTIONS if s in set(r.section for r in rot_results)]
+    sections = [s for s in BLADE_SECTIONS if s in set(r.section for r in rot_results)]
     x = np.arange(len(conds))
     width = 0.12
 
@@ -668,7 +667,7 @@ def _fig_kinematics_comparison(
 ) -> None:
     """Panel triple: Δα_3D aerodinámico vs Δβ_mech_3D por sección."""
     conditions = _ordered_conditions(df["condition"].unique())
-    sections   = [s for s in _SECTIONS if s in df["section"].unique()]
+    sections   = [s for s in BLADE_SECTIONS if s in df["section"].unique()]
 
     fig, axes = plt.subplots(1, len(sections), figsize=(5 * len(sections), 5), sharey=True)
     if len(sections) == 1:
@@ -721,7 +720,7 @@ def _fig_alpha_opt_by_condition(
     x = np.arange(len(conds))
     width = 0.25
     fig, ax = plt.subplots(figsize=(7.5, 5.0))
-    for i, section in enumerate(_SECTIONS):
+    for i, section in enumerate(BLADE_SECTIONS):
         vals = [
             next((r.alpha_opt_3d for r in rot_results if r.condition == c and r.section == section),
                  float("nan"))
@@ -752,7 +751,7 @@ def _fig_pitch_adjustment(
     x = np.arange(len(conds))
     width = 0.25
     fig, ax = plt.subplots(figsize=(7.5, 5.0))
-    for i, section in enumerate(_SECTIONS):
+    for i, section in enumerate(BLADE_SECTIONS):
         vals = [
             next((p.delta_pitch for p in pitch_adjustments
                   if p.condition == c and p.section == section), float("nan"))

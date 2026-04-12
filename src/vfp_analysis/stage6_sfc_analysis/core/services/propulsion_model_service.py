@@ -18,10 +18,10 @@ from __future__ import annotations
 import yaml
 from pathlib import Path
 
-from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import EngineBaseline  # noqa: F401 (referencia futura)
+from vfp_analysis import config as _base_config
 
 
-def compute_propulsion_efficiency(v0: float, vj: float) -> float:
+def compute_propulsion_efficiency(v0: float, vj: float) -> float:  # noqa: D401
     """
     Eficiencia propulsiva: η_prop = 2 / (1 + V_j / V_0).
 
@@ -63,12 +63,15 @@ def compute_fan_efficiency_improvement(
     efficiency_ratio = cl_cd_new / cl_cd_baseline
     transfer_coeff = 1.0
     try:
-        cfg_path = Path(__file__).resolve().parents[5] / "config" / "engine_parameters.yaml"
+        cfg_path = _base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
         with cfg_path.open("r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
             transfer_coeff = float(cfg.get("profile_efficiency_transfer", 1.0))
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug(
+            "profile_efficiency_transfer no encontrado en engine_parameters.yaml: %s", exc
+        )
 
     eff_gain = (efficiency_ratio - 1.0) * transfer_coeff
     fan_efficiency_new = fan_efficiency_baseline * (1.0 + eff_gain)

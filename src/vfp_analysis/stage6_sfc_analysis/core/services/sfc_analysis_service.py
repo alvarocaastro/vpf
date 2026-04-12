@@ -90,26 +90,28 @@ def compute_sfc_analysis(
     return results
 
 
-def _get_baseline_cl_cd(df: pd.DataFrame, reference_condition: str) -> float:
-    """CL/CD medio de la condición de referencia (crucero)."""
-    ref = df[df["condition"] == reference_condition]
-    if ref.empty:
-        for col in ("CL_CD_max", "ld_max"):
-            if col in df.columns:
-                return float(df[col].mean())
-        return 0.0
+def _mean_cl_cd(df: pd.DataFrame) -> float:
+    """Devuelve la media del CL/CD del DataFrame usando la primera columna disponible."""
     for col in ("CL_CD_max", "ld_max"):
-        if col in ref.columns:
-            return float(ref[col].mean())
+        if col in df.columns:
+            return float(df[col].mean())
     return 0.0
+
+
+def _get_baseline_cl_cd(df: pd.DataFrame, reference_condition: str) -> float:
+    """CL/CD medio de la condición de referencia (crucero).
+
+    Si la condición de referencia no existe en el DataFrame, usa la media global.
+    Retorna 0.0 si no se encuentran columnas de eficiencia.
+    """
+    ref = df[df["condition"] == reference_condition]
+    return _mean_cl_cd(ref) if not ref.empty else _mean_cl_cd(df)
 
 
 def _get_vpf_cl_cd(df: pd.DataFrame, condition: str) -> float:
-    """CL/CD medio para una condición de vuelo con VPF activo."""
-    cond = df[df["condition"] == condition]
-    if cond.empty:
-        return 0.0
-    for col in ("CL_CD_max", "ld_max"):
-        if col in cond.columns:
-            return float(cond[col].mean())
-    return 0.0
+    """CL/CD medio para una condición de vuelo con VPF activo.
+
+    Retorna 0.0 si la condición no existe en el DataFrame.
+    """
+    subset = df[df["condition"] == condition]
+    return _mean_cl_cd(subset) if not subset.empty else 0.0

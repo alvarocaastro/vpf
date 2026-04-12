@@ -8,6 +8,7 @@ including maximum efficiency, optimal angle of attack, and maximum lift.
 from __future__ import annotations
 
 import dataclasses
+import math
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,7 +75,7 @@ def compute_metrics_from_polar(
     blade_section: str,
     reynolds: float,
     ncrit: float,
-    alpha_min: float = 3.0,
+    alpha_min: float | None = None,
 ) -> AerodynamicMetrics:
     """
     Compute aerodynamic metrics from polar data.
@@ -109,6 +110,10 @@ def compute_metrics_from_polar(
     AerodynamicMetrics
         Computed metrics including stall margin and pitching moment.
     """
+    if alpha_min is None:
+        from vfp_analysis.settings import get_settings
+        alpha_min = get_settings().physics.ALPHA_MIN_OPT_DEG
+
     eff_col = resolve_efficiency_column(df)
 
     # Prefer corrected/KT columns when available (Stage 3 output).
@@ -206,15 +211,20 @@ def compute_all_metrics(
                 #   mid_span 2.2° — intermediate stabilisation
                 #   tip      2.0° — thinnest section, earliest stabilisation
                 # For other conditions the second peak (alpha >= 3°) applies.
+                # At cruise (design condition) the corrected polars show a different
+                # peak structure due to wave drag, so we use a lower alpha_min per section.
+                # These values are tuned to the corrected polar shapes observed at M=0.85.
                 _CRUISE_ALPHA_MIN: dict[str, float] = {
-                    "root": 2.5,
+                    "root": 2.5,     # thicker section, stabilises later
                     "mid_span": 2.2,
-                    "tip": 2.0,
+                    "tip": 2.0,      # thinnest section, earliest stabilisation
                 }
+                from vfp_analysis.settings import get_settings as _gs
+                _default_alpha_min = _gs().physics.ALPHA_MIN_OPT_DEG
                 if flight == design_condition:
-                    alpha_min = _CRUISE_ALPHA_MIN.get(section, 2.0)
+                    alpha_min = _CRUISE_ALPHA_MIN.get(section, _default_alpha_min)
                 else:
-                    alpha_min = 3.0
+                    alpha_min = _default_alpha_min
                 metrics = compute_metrics_from_polar(
                     df, flight, section, reynolds, ncrit, alpha_min=alpha_min
                 )
@@ -304,12 +314,14 @@ def enrich_with_cruise_reference(
                 )
 
         delta_alpha = m.alpha_opt - alpha_design
-        eff_gain = m.max_efficiency - eff_at_design if not (
-            eff_at_design != eff_at_design  # NaN check
-        ) else float("nan")
+        eff_gain = (
+            m.max_efficiency - eff_at_design
+            if not math.isnan(eff_at_design)
+            else float("nan")
+        )
         eff_gain_pct = (
             eff_gain / eff_at_design * 100
-            if eff_at_design > 0 and eff_gain == eff_gain  # not NaN
+            if eff_at_design > 0 and not math.isnan(eff_gain)
             else float("nan")
         )
 

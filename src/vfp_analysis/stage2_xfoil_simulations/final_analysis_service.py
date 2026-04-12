@@ -107,23 +107,21 @@ class FinalAnalysisService:
         out_dir: Path,
         airfoil: Airfoil,
         cfg: FinalSimulationConfig,
-    ) -> float:
-        """Generate all plots and return alpha_eff (max CL/CD)."""
+    ) -> Tuple[float, float, float]:
+        """Generate all polar plots and return (alpha_opt, alpha_stall, cl_max).
 
-        # 1) CL/CD vs alpha (eficiencia) y alpha_eff
-        #    Esta es la figura principal para el TFG.
-        #    Usamos el SEGUNDO pico (alpha >= 3°) porque el primero es un artefacto
-        #    de burbuja de separación laminar no representativo de turbomaquinaria.
-        df_eff = df.copy()
-        # Evitar infinidades o NaN en la búsqueda de máximo
-        df_eff = df_eff.replace([float("inf"), float("-inf")], pd.NA).dropna(subset=["ld"])
+        The optimal angle is defined as the second CL/CD peak (alpha >= ALPHA_MIN_OPT)
+        to avoid the laminar-separation-bubble artefact at very low angles.
+        """
+        from vfp_analysis.settings import get_settings
+        alpha_min_opt = get_settings().physics.ALPHA_MIN_OPT_DEG
+
+        df_eff = df.replace([float("inf"), float("-inf")], pd.NA).dropna(subset=["ld"])
         if df_eff.empty:
             alpha_eff = float("nan")
         else:
-            # Focus on second peak (alpha >= 3°) for turbomachinery operation
-            df_second_peak = df_eff[df_eff["alpha"] >= 3.0]
+            df_second_peak = df_eff[df_eff["alpha"] >= alpha_min_opt]
             if df_second_peak.empty:
-                # Fallback to all data if no second peak
                 df_second_peak = df_eff
             idx_max = df_second_peak["ld"].idxmax()
             alpha_eff = float(df_second_peak.loc[idx_max, "alpha"])
