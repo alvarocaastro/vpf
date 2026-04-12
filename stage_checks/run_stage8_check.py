@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from common import build_parser, run_stage_check
-
-
-if __name__ == "__main__":
-    args = build_parser(8).parse_args()
-    run_stage_check(8, clean=not args.no_clean, cache=args.cache)
+# Stage 8 ya no existe — el pipeline fue comprimido a 6 etapas.
+print(
+    "Stage 8 ya no existe en el pipeline actual (comprimido a 6 etapas).\n"
+    "Usa run_stage6_check.py para el análisis de SFC."
+)

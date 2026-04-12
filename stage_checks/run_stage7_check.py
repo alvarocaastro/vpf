@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from common import build_parser, run_stage_check
-
-
-if __name__ == "__main__":
-    args = build_parser(7).parse_args()
-    run_stage_check(7, clean=not args.no_clean, cache=args.cache)
+# Stage 7 and 8 no longer exist — the pipeline was compressed to 6 stages.
+# Stage 5 (pitch kinematics) and Stage 6 (SFC) cover what was previously in stages 6-8.
+print(
+    "Stage 7 ya no existe en el pipeline actual (comprimido a 6 etapas).\n"
+    "Usa run_stage5_check.py o run_stage6_check.py."
+)
