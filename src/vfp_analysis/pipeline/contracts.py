@@ -19,6 +19,7 @@ Beneficios
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -132,6 +133,13 @@ class Stage3Result:
         require_dir(self.corrected_dir, "Stage 3 corrected polars dir")
         if self.n_cases_corrected == 0:
             raise ValueError("Stage 3: ningún polar corregido — revisar Stage 2 outputs")
+        # Verify at least one corrected_polar.csv exists inside the directory tree
+        polar_files = list(self.corrected_dir.rglob("corrected_polar.csv"))
+        if not polar_files:
+            raise ValueError(
+                f"Stage 3: corrected_dir existe pero no contiene ningún "
+                f"corrected_polar.csv: {self.corrected_dir}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +166,9 @@ class Stage4Result:
     stage_dir: Path
 
     def validate(self) -> None:
-        from vfp_analysis.validation.validators import require_dir, require_file
+        from vfp_analysis.validation.validators import require_dir
         require_dir(self.stage_dir, "Stage 4 results dir")
+        require_dir(self.tables_dir, "Stage 4 tables dir")
         if not self.metrics:
             raise ValueError("Stage 4: lista de métricas vacía")
 
@@ -198,9 +207,9 @@ class Stage5Result:
         from vfp_analysis.validation.validators import require_dir
         require_dir(self.tables_dir, "Stage 5 tables dir")
         require_dir(self.figures_dir, "Stage 5 figures dir")
-        if self.n_tables < 7:
+        if self.n_tables < 9:
             raise ValueError(
-                f"Stage 5: solo {self.n_tables} tablas (se esperan ≥7)"
+                f"Stage 5: solo {self.n_tables} tablas (se esperan ≥9)"
             )
 
 
@@ -231,3 +240,10 @@ class Stage6Result:
     def validate(self) -> None:
         from vfp_analysis.validation.validators import require_dir
         require_dir(self.stage_dir, "Stage 6 results dir")
+        require_dir(self.tables_dir, "Stage 6 tables dir")
+        require_dir(self.figures_dir, "Stage 6 figures dir")
+        if math.isnan(self.mean_sfc_reduction_pct):
+            raise ValueError(
+                "Stage 6: mean_sfc_reduction_pct es NaN — "
+                "revisar que sfc_analysis.csv contiene columna 'sfc_reduction'"
+            )

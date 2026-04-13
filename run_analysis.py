@@ -499,9 +499,11 @@ def step_6_pitch_kinematics() -> Stage5Result:
     if twist_file.exists():
         import pandas as _pd
         df_tw = _pd.read_csv(twist_file)
-        if "beta_metal_deg" in df_tw.columns and not df_tw.empty:
-            bm = df_tw["beta_metal_deg"].dropna()
-            twist_total = float(bm.max() - bm.min()) if len(bm) >= 2 else float("nan")
+        if "beta_metal_deg" in df_tw.columns and "section" in df_tw.columns:
+            bm_root = df_tw.loc[df_tw["section"] == "root", "beta_metal_deg"]
+            bm_tip  = df_tw.loc[df_tw["section"] == "tip",  "beta_metal_deg"]
+            if not bm_root.empty and not bm_tip.empty:
+                twist_total = float(bm_root.iloc[0]) - float(bm_tip.iloc[0])
 
     offdesign_file = tables_dir / "off_design_incidence.csv"
     if offdesign_file.exists():
