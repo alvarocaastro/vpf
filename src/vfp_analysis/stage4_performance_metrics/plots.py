@@ -149,10 +149,7 @@ def plot_design_reference_section(
         section_label = SECTION_LABELS.get(section, section)
         ax.set_xlabel(r"$\alpha$ (°)")
         ax.set_ylabel(r"$C_L/C_D$")
-        ax.set_title(
-            f"Eficiencia aerodinámica — Sección {section_label}\n"
-            r"$\bullet$ = $\alpha_{opt}$ (VPF)   $\circ$ = $\alpha_{design}$ (pala fija)"
-        )
+        ax.set_title(f"$C_L/C_D$ vs $\\alpha$ — Sección {section_label}")
         ax.legend(
             title="Condición",
             bbox_to_anchor=(1.02, 1),
@@ -243,10 +240,7 @@ def plot_efficiency_penalty_overview(
         section_label = SECTION_LABELS.get(summary_section, summary_section)
         ax.set_xlabel(r"$\alpha$ (°)")
         ax.set_ylabel(r"$C_L/C_D$")
-        ax.set_title(
-            f"Penalización de eficiencia con pala fija — Sección {section_label}\n"
-            r"$\bullet$ = $\alpha_{opt}$ (VPF)   $\circ$ = $\alpha_{design}$ (pala fija)"
-        )
+        ax.set_title(f"Penalización del paso fijo — Sección {section_label}")
         ax.legend(
             title="Condición",
             bbox_to_anchor=(1.02, 1),

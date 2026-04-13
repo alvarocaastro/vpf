@@ -134,12 +134,56 @@ def plot_pitch_map(df: pd.DataFrame, delta_beta: Dict[str, float], out_dir: Path
         ax.set_xticks(x)
         ax.set_xticklabels([FLIGHT_LABELS[f] for f in flights_present])
         ax.set_ylabel(r"Ángulo de paso requerido $\beta$ [°]")
-        ax.set_title("VPF — Ángulo de paso de pala por fase de vuelo y sección")
+        ax.set_title(r"Ángulo de paso requerido $\beta$ por fase de vuelo")
         ax.legend(
             title="Sección",
             bbox_to_anchor=(1.02, 1), loc="upper left",
             borderaxespad=0,
         )
+
+        # ── Anotación: rango total del mecanismo ────────────────────────────
+        # Rango máximo requerido por el actuador (sección más exigente)
+        if delta_beta:
+            delta_mech = max(delta_beta.values())
+            section_max = max(delta_beta, key=delta_beta.__getitem__)
+            ax.text(
+                0.02, 0.97,
+                f"Rango mecanismo VPF: $\\Delta\\beta_{{\\max}}$ = {delta_mech:.1f}°  "
+                f"({SECTION_LABELS[section_max]})",
+                transform=ax.transAxes,
+                va="top", ha="left",
+                fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
+                          edgecolor="gray", alpha=0.85),
+            )
+
+        # ── Llaves de rango Δβ por sección ──────────────────────────────────
+        for i, section in enumerate(sections_present):
+            sub = df[df["section"] == section].set_index("flight")
+            beta_vals = [
+                sub.loc[f, "beta_deg"] if f in sub.index else float("nan")
+                for f in flights_present
+            ]
+            valid = [v for v in beta_vals if not math.isnan(v)]
+            if len(valid) < 2:
+                continue
+            b_min, b_max = min(valid), max(valid)
+            offset = (i - n_sections / 2.0 + 0.5) * bar_width
+            x_brace = max(x) + offset + bar_width * 0.6
+            ax.annotate(
+                "",
+                xy=(x_brace, b_min), xytext=(x_brace, b_max),
+                arrowprops=dict(
+                    arrowstyle="<->", color=COLORS[section],
+                    lw=1.4,
+                ),
+            )
+            ax.text(
+                x_brace + 0.08, (b_min + b_max) / 2.0,
+                f"{delta_beta.get(section, 0):.1f}°",
+                va="center", ha="left", fontsize=7.5, color=COLORS[section],
+            )
+
         fig.tight_layout()
         fig.savefig(out_dir / "blade_pitch_map.png")
         plt.close(fig)
@@ -194,7 +238,7 @@ def plot_alpha_opt_evolution(
         ax.set_xticks(x)
         ax.set_xticklabels([FLIGHT_LABELS[f] for f in flight_order])
         ax.set_ylabel(r"$\alpha_{opt}$ [°]")
-        ax.set_title(r"Variación del $\alpha_{opt}$ por fase de vuelo y sección de pala")
+        ax.set_title(r"Evolución de $\alpha_{opt}$ por fase de vuelo")
         ax.legend(
             title="Sección",
             bbox_to_anchor=(1.02, 1), loc="upper left",
@@ -276,8 +320,7 @@ def plot_vpf_efficiency_by_section(
             ax.set_xlabel(r"$\alpha$ [°]")
             ax.set_ylabel(r"$C_L / C_D$")
             ax.set_title(
-                f"Eficiencia aerodinámica — sección {SECTION_LABELS[section]}\n"
-                r"(● = $\alpha_{opt}$ VPF  |  - - = paso fijo crucero)"
+                f"$C_L/C_D$ vs $\\alpha$ — Sección {SECTION_LABELS[section]}"
             )
             ax.set_xlim(-2, 18)
             # Legend outside, to the right of the plot
@@ -351,7 +394,7 @@ def plot_vpf_clcd_penalty(
         ax_top.set_xticks(x_centers)
         ax_top.set_xticklabels([FLIGHT_LABELS[f] for f in flight_order])
         ax_top.set_ylabel(r"$C_L/C_D$  en punto de operación")
-        ax_top.set_title("Penalización de eficiencia: paso fijo de crucero vs paso variable óptimo")
+        ax_top.set_title(r"$C_L/C_D$ en punto de operación: VPF vs paso fijo de crucero")
         ax_top.legend(
             bbox_to_anchor=(1.02, 1), loc="upper left",
             borderaxespad=0, ncol=1,
@@ -380,7 +423,7 @@ def plot_vpf_clcd_penalty(
         ax_bot.set_xticks(x_centers)
         ax_bot.set_xticklabels([FLIGHT_LABELS[f] for f in flight_order])
         ax_bot.set_ylabel("Eficiencia retenida [%]")
-        ax_bot.set_title("% de $C_L/C_D$ óptimo alcanzado con paso fijo de crucero")
+        ax_bot.set_title("Eficiencia retenida con paso fijo de crucero [%]")
         ax_bot.set_ylim(0, 115)
         ax_bot.legend(
             bbox_to_anchor=(1.02, 1), loc="upper left",

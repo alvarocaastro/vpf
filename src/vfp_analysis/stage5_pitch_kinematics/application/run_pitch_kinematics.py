@@ -48,7 +48,7 @@ from vfp_analysis.config_loader import (
     get_fan_rpm,
     get_output_dirs,
 )
-from vfp_analysis.shared.plot_style import SECTION_COLORS, apply_style
+from vfp_analysis.shared.plot_style import FLIGHT_LABELS, SECTION_COLORS, SECTION_LABELS, apply_style
 from vfp_analysis.stage5_pitch_kinematics.adapters.filesystem.data_loader import (
     FilesystemDataLoader,
 )
@@ -123,9 +123,9 @@ def _fig_cascade_solidity(cascade: List[CascadeResult], figures_dir: Path) -> No
     sigmas   = [r.solidity for r in cascade]
 
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
-    ax.axhspan(0.0, 0.5,  alpha=0.12, color="#4CAF50", label="Isolated airfoil (σ < 0.5)")
-    ax.axhspan(0.5, 1.5,  alpha=0.12, color="#FF9800", label="Moderate cascade (0.5–1.5)")
-    ax.axhspan(1.5, 5.0,  alpha=0.12, color="#F44336", label="High solidity — wide-chord (σ > 1.5)")
+    ax.axhspan(0.0, 0.5,  alpha=0.12, color="#4CAF50", label=r"Perfil aislado ($\sigma < 0.5$)")
+    ax.axhspan(0.5, 1.5,  alpha=0.12, color="#FF9800", label=r"Cascada moderada ($0.5 \leq \sigma \leq 1.5$)")
+    ax.axhspan(1.5, 5.0,  alpha=0.12, color="#F44336", label=r"Alta solidez — cuerda ancha ($\sigma > 1.5$)")
 
     for res in cascade:
         ax.scatter(res.radius_m, res.solidity,
@@ -139,7 +139,7 @@ def _fig_cascade_solidity(cascade: List[CascadeResult], figures_dir: Path) -> No
 
     ax.set_xlabel("Blade radius r [m]")
     ax.set_ylabel(r"Solidity $\sigma = c/s$ [—]")
-    ax.set_title("Cascade Solidity Profile — Fan Blade Sections", pad=8)
+    ax.set_title(r"Solidez de cascada $\sigma(r)$ por sección de pala", pad=8)
     ax.set_xlim(0, max(radii) * 1.3)
     ax.set_ylim(0, max(sigmas) * 1.5)
     ax.legend(loc="upper right", fontsize=8)
@@ -157,9 +157,9 @@ def _fig_cascade_cl_correction(cascade: List[CascadeResult], figures_dir: Path) 
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
-    bars_2d = ax.bar(x - width/2, cl_2d, width, label=r"$C_L$ isolated 2D",
+    bars_2d = ax.bar(x - width/2, cl_2d, width, label=r"$C_L$ perfil aislado (2D)",
                      color="#4393C3", edgecolor="white", linewidth=0.6, zorder=3)
-    bars_c  = ax.bar(x + width/2, cl_casc, width, label=r"$C_L$ cascade (Weinig)",
+    bars_c  = ax.bar(x + width/2, cl_casc, width, label=r"$C_L$ en cascada (Weinig)",
                      color="#D6604D", edgecolor="white", linewidth=0.6, zorder=3)
     ax.bar_label(bars_2d, fmt="%.3f", padding=3, fontsize=8)
     ax.bar_label(bars_c,  fmt="%.3f", padding=3, fontsize=8)
@@ -167,7 +167,7 @@ def _fig_cascade_cl_correction(cascade: List[CascadeResult], figures_dir: Path) 
     ax.set_xticklabels([s.replace("_", " ").title() for s in sections])
     ax.set_xlabel("Blade Section")
     ax.set_ylabel(r"Lift coefficient $C_L$ at $\alpha_{opt}$ [—]")
-    ax.set_title("Cascade CL Correction (Weinig) at Cruise Design Point", pad=8)
+    ax.set_title(r"Corrección de $C_L$ en cascada (Weinig) — Punto de diseño", pad=8)
     ax.legend()
     fig.tight_layout()
     fig.savefig(figures_dir / "cascade_cl_correction.png")
@@ -191,7 +191,7 @@ def _fig_deviation_carter(cascade: List[CascadeResult], figures_dir: Path) -> No
     ax.set_xticks(range(len(sections)))
     ax.set_xticklabels([s.replace("_", " ").title() for s in sections])
     ax.set_ylabel(r"Carter deviation angle $\delta$ [°]")
-    ax.set_title("Carter's Rule — Flow Deviation per Section", pad=8)
+    ax.set_title("Desviación de flujo por sección — Regla de Carter", pad=8)
     ax.set_xlabel("Blade Section")
 
     # Panel 2: δ vs σ con anotaciones
@@ -203,10 +203,10 @@ def _fig_deviation_carter(cascade: List[CascadeResult], figures_dir: Path) -> No
         ax2.scatter(res.solidity, res.delta_carter_deg,
                     s=100, color=SECTION_COLORS[res.section],
                     zorder=5, edgecolors="white", linewidths=0.8,
-                    label=res.section.replace("_", " ").title())
+                    label=SECTION_LABELS.get(res.section, res.section))
     ax2.set_xlabel(r"Solidity $\sigma$ [—]")
     ax2.set_ylabel(r"Deviation angle $\delta$ [°]")
-    ax2.set_title("Deviation vs Solidity — Carter's Rule", pad=8)
+    ax2.set_title("Desviación vs solidez — Regla de Carter", pad=8)
     ax2.legend(fontsize=8)
 
     fig.tight_layout()
@@ -240,24 +240,24 @@ def _fig_polars_2d_vs_3d_root(
         color = _cond_colors().get(condition, "gray")
 
         axes[0].plot(df_2d["alpha"], ld_2d, "--", color=color,
-                     lw=1.2, label=f"{condition.title()} 2D")
+                     lw=1.2, label=f"{FLIGHT_LABELS.get(condition, condition)} 2D")
         if not df_3d.empty and "ld_3d" in df_3d.columns:
             axes[0].plot(df_3d["alpha"], df_3d["ld_3d"], "-", color=color,
-                         lw=1.8, label=f"{condition.title()} 3D")
+                         lw=1.8, label=f"{FLIGHT_LABELS.get(condition, condition)} 3D")
         if not df_3d.empty and "cl_3d" in df_3d.columns:
             axes[1].plot(df_3d["alpha"], df_3d["cl_3d"], "-", color=color,
-                         lw=1.8, label=f"{condition.title()} 3D")
+                         lw=1.8, label=f"{FLIGHT_LABELS.get(condition, condition)} 3D")
             axes[1].plot(df_2d["alpha"], df_2d[cl_col], "--", color=color,
-                         lw=1.2, label=f"{condition.title()} 2D")
+                         lw=1.2, label=f"{FLIGHT_LABELS.get(condition, condition)} 2D")
 
     axes[0].set_xlabel(r"$\alpha$ [°]")
     axes[0].set_ylabel(r"$C_L/C_D$ [—]")
-    axes[0].set_title("Root Section — L/D: 2D vs 3D (Snel)", pad=8)
+    axes[0].set_title(r"$C_L/C_D$: XFOIL 2D vs 3D corregido (Snel) — Raíz", pad=8)
     axes[0].legend(fontsize=7, ncol=2)
 
     axes[1].set_xlabel(r"$\alpha$ [°]")
     axes[1].set_ylabel(r"$C_L$ [—]")
-    axes[1].set_title("Root Section — CL: 2D vs 3D (Snel)", pad=8)
+    axes[1].set_title(r"$C_L$: XFOIL 2D vs 3D corregido (Snel) — Raíz", pad=8)
     axes[1].legend(fontsize=7, ncol=2)
 
     fig.tight_layout()
@@ -291,7 +291,7 @@ def _fig_snel_correction_spanwise(
         ax.scatter(pt.c_over_r ** 2, pt.delta_cl_snel_at_opt,
                    s=120, color=SECTION_COLORS[pt.section], zorder=5,
                    edgecolors="white", linewidths=0.8,
-                   label=pt.section.replace("_", " ").title())
+                   label=SECTION_LABELS.get(pt.section, pt.section))
         ax.annotate(
             f"{pt.cl_gain_pct:.1f}%",
             (pt.c_over_r ** 2, pt.delta_cl_snel_at_opt),
@@ -299,7 +299,7 @@ def _fig_snel_correction_spanwise(
         )
     ax.set_xlabel(r"$(c/r)^2$ [—]")
     ax.set_ylabel(r"$\Delta C_L$ Snel [—]")
-    ax.set_title("Rotational Lift Gain — Snel Correction", pad=8)
+    ax.set_title(r"Incremento de $C_L$ por rotación — Corrección de Snel", pad=8)
     ax.legend(fontsize=8)
 
     # Panel 2: ganancia porcentual por sección y condición
@@ -313,12 +313,12 @@ def _fig_snel_correction_spanwise(
     for i, cond in enumerate(all_conds):
         pts = {r.section: r.cl_gain_pct for r in rot_results if r.condition == cond}
         vals = [pts.get(s, 0.0) for s in all_sections]
-        ax2.bar(x + i * width, vals, width, label=cond.title(),
+        ax2.bar(x + i * width, vals, width, label=FLIGHT_LABELS.get(cond, cond),
                 color=cc.get(cond, "gray"), edgecolor="white", linewidth=0.6, zorder=3)
     ax2.set_xticks(x + width * (len(all_conds) - 1) / 2)
     ax2.set_xticklabels([s.replace("_", " ").title() for s in all_sections])
     ax2.set_ylabel(r"$C_L$ gain [%]")
-    ax2.set_title("Snel CL Gain by Section and Condition", pad=8)
+    ax2.set_title(r"Ganancia de $C_L$ (Snel) por sección y condición", pad=8)
     ax2.legend(fontsize=8)
 
     fig.tight_layout()
@@ -343,9 +343,9 @@ def _fig_blade_twist_profile(
 
     fig, ax = plt.subplots(figsize=(7.0, 5.0))
     ax.plot(radii, betas, "s-", color="#1F78B4", lw=2.0, ms=9,
-            label=r"$\beta_{metal}(r)$ — blade metal angle")
+            label=r"$\beta_{metal}(r)$ — ángulo de paso de diseño")
     ax.plot(radii, phis, "^--", color="#FF7F00", lw=1.5, ms=8,
-            label=r"$\phi_{flow}(r)$ — cruise inflow angle")
+            label=r"$\phi_{flow}(r)$ — ángulo de entrada en crucero")
     ax.plot(radii, alphas, "o:", color="#4DAC26", lw=1.5, ms=8,
             label=r"$\alpha_{opt,3D,cruise}(r)$")
 
@@ -359,8 +359,8 @@ def _fig_blade_twist_profile(
     ax.set_xlabel("Blade radius r [m]")
     ax.set_ylabel("Angle [°]")
     ax.set_title(
-        f"Blade Twist Profile at Cruise Design Point\n"
-        f"Total twist = {twist_total:.1f}°  (root − tip)",
+        f"Distribución de torsión de pala — Punto de diseño en crucero\n"
+        f"Twist total = {twist_total:.1f}°  (raíz − punta)",
         pad=8,
     )
     ax.legend(loc="upper right")
@@ -410,7 +410,7 @@ def _fig_off_design_heatmap(
                             fontsize=9, fontweight="bold",
                             color="white" if abs(v) > np.nanstd(data) else "black")
 
-    fig.suptitle("Off-Design Incidence Map — Single Actuator Pitch Compromise", fontweight="bold")
+    fig.suptitle("Mapa de incidencia fuera de diseño — Compromiso de actuador único", fontweight="bold")
     fig.tight_layout()
     fig.savefig(figures_dir / "off_design_incidence_heatmap.png")
     plt.close(fig)
@@ -450,7 +450,7 @@ def _fig_pitch_compromise_loss(
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel("Efficiency loss [%]")
     ax.set_title(
-        "Pitch Compromise Efficiency Loss — Single Actuator vs Individual Optimum",
+        "Pérdida de eficiencia por compromiso de paso — Actuador único",
         pad=8,
     )
     ax.legend()
@@ -474,7 +474,7 @@ def _fig_phi_psi_map(
     ax.axvspan(0.35, 0.55, alpha=0.10, color="#4CAF50")
     ax.axhspan(0.25, 0.50, alpha=0.10, color="#4CAF50")
     ax.fill_betweenx([0.25, 0.50], 0.35, 0.55, alpha=0.18, color="#4CAF50",
-                     label="Design zone (Dixon & Hall, 2013)")
+                     label="Zona de diseño (Dixon & Hall, 2013)")
 
     # Puntos de operación
     cmap = _cond_colors()
@@ -496,18 +496,18 @@ def _fig_phi_psi_map(
     from matplotlib.lines import Line2D
     handles = [
         Line2D([0], [0], marker="o", color="w", markerfacecolor=SECTION_COLORS["root"],
-               markersize=9, label="Root"),
+               markersize=9, label=SECTION_LABELS["root"]),
         Line2D([0], [0], marker="o", color="w", markerfacecolor=SECTION_COLORS["mid_span"],
-               markersize=9, label="Mid span"),
+               markersize=9, label=SECTION_LABELS["mid_span"]),
         Line2D([0], [0], marker="o", color="w", markerfacecolor=SECTION_COLORS["tip"],
-               markersize=9, label="Tip"),
-        Line2D([0], [0], color="#4CAF50", lw=8, alpha=0.35, label="Design zone"),
+               markersize=9, label=SECTION_LABELS["tip"]),
+        Line2D([0], [0], color="#4CAF50", lw=8, alpha=0.35, label="Zona de diseño"),
     ]
     ax.legend(handles=handles, loc="upper right", fontsize=8)
     ax.set_xlabel(r"Flow coefficient $\phi = V_a/U$ [—]")
     ax.set_ylabel(r"Work coefficient $\psi = \Delta V_\theta/U$ [—]")
-    ax.set_title("Stage Loading Map — VPF Operating Points\n"
-                 r"(Dixon & Hall, 2013 — high-bypass fan design zone)", pad=8)
+    ax.set_title("Mapa de carga de etapa — Puntos de operación VPF\n"
+                 r"(zona de diseño: Dixon & Hall, 2013)", pad=8)
     fig.tight_layout()
     fig.savefig(figures_dir / "phi_psi_operating_map.png")
     plt.close(fig)
@@ -530,7 +530,7 @@ def _fig_work_distribution(
             row = next((r for r in loading if r.condition == cond and r.section == section), None)
             vals.append(row.w_specific_kj_kg if row and not math.isnan(row.w_specific_kj_kg) else 0.0)
         bars = ax.bar(x + i * width, vals, width,
-                      label=section.replace("_", " ").title(),
+                      label=SECTION_LABELS.get(section, section),
                       color=SECTION_COLORS[section],
                       edgecolor="white", linewidth=0.6, zorder=3)
         ax.bar_label(bars, fmt="%.1f", padding=3, fontsize=8)
@@ -539,7 +539,7 @@ def _fig_work_distribution(
     ax.set_xticklabels([c.title() for c in conds])
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel(r"Specific work $W = U \cdot \Delta V_\theta$ [kJ/kg]")
-    ax.set_title("Stage Specific Work Distribution (Euler Equation)", pad=8)
+    ax.set_title("Trabajo específico de etapa por fase de vuelo (ec. de Euler)", pad=8)
     ax.legend()
     fig.tight_layout()
     fig.savefig(figures_dir / "work_distribution.png")
@@ -564,12 +564,12 @@ def _fig_loading_profile_spanwise(
         radii = [radii_map[r.section] for r in pts]
         psis  = [r.psi_loading for r in pts]
         ax.plot(radii, psis, "o-", color=cc.get(cond, "gray"),
-                lw=2.0, ms=8, label=cond.title())
+                lw=2.0, ms=8, label=FLIGHT_LABELS.get(cond, cond))
 
-    ax.axhspan(0.25, 0.50, alpha=0.10, color="#4CAF50", label="Design zone")
+    ax.axhspan(0.25, 0.50, alpha=0.10, color="#4CAF50", label="Zona de diseño")
     ax.set_xlabel("Blade radius r [m]")
     ax.set_ylabel(r"Work coefficient $\psi$ [—]")
-    ax.set_title("Spanwise Loading Profile — VPF vs Design Zone", pad=8)
+    ax.set_title(r"Perfil radial de coeficiente de carga $\psi$", pad=8)
     ax.legend()
     fig.tight_layout()
     fig.savefig(figures_dir / "loading_profile_spanwise.png")
@@ -596,7 +596,7 @@ def _fig_efficiency_curves(
                 continue
             color = SECTION_COLORS[section]
             ax.plot(df_3d["alpha"], df_3d["ld_3d"],
-                    color=color, label=section.replace("_", " ").title(), zorder=3)
+                    color=color, label=SECTION_LABELS.get(section, section), zorder=3)
             alpha_opt = alpha_opt_3d_map.get((condition, section), float("nan"))
             ld_max    = cl_cd_max_3d_map.get((condition, section), float("nan"))
             if not math.isnan(alpha_opt) and not math.isnan(ld_max):
@@ -606,7 +606,7 @@ def _fig_efficiency_curves(
 
         ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax.set_ylabel(r"$C_{L,3D}/C_D$ [—]")
-        ax.set_title(f"3D-Corrected Efficiency Curves — {condition.title()}", pad=8)
+        ax.set_title(f"Curvas de eficiencia 3D (Snel) — {condition.capitalize()}", pad=8)
         ax.legend(loc="lower right")
         fig.tight_layout()
         fig.savefig(figures_dir / f"efficiency_curves_{condition}.png")
@@ -649,15 +649,15 @@ def _fig_alpha_opt_2d_vs_3d(
         handles.append(Patch(facecolor=SECTION_COLORS[sec],
                              label=sec.replace("_", " ").title()))
     handles += [
-        Patch(facecolor="gray", alpha=0.5, label="2D (compressibility corrected)"),
-        Patch(facecolor="gray", label="3D (cascade + Snel corrected)"),
+        Patch(facecolor="gray", alpha=0.5, label="2D (corrección de compresibilidad)"),
+        Patch(facecolor="gray", label="3D (cascada + corrección Snel)"),
     ]
     ax.legend(handles=handles, fontsize=8, ncol=2)
     ax.set_xticks(x)
     ax.set_xticklabels([c.title() for c in conds])
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel(r"$\alpha_{opt}$ [°]")
-    ax.set_title(r"$\alpha_{opt}$ Comparison: 2D vs 3D Corrected", pad=8)
+    ax.set_title(r"$\alpha_{opt}$: XFOIL 2D vs 3D corregido (Snel)", pad=8)
     fig.tight_layout()
     fig.savefig(figures_dir / "alpha_opt_2d_vs_3d.png")
     plt.close(fig)
@@ -693,11 +693,11 @@ def _fig_kinematics_comparison(
         ]
 
         ax.bar(x - width/2, val_aero, width,
-               label=r"Aerodynamic ($\Delta\alpha_{3D}$)", color="#9ECAE1", edgecolor="white")
+               label=r"Aerodinámica ($\Delta\alpha_{3D}$)", color="#9ECAE1", edgecolor="white")
         ax.bar(x + width/2, val_mech, width,
-               label=r"Mechanical ($\Delta\beta_{mech}$)", color="#3182BD", edgecolor="white")
+               label=r"Mecánica ($\Delta\beta_{mech}$)", color="#3182BD", edgecolor="white")
         ax.axhline(0, color="0.3", linestyle="--", linewidth=0.8)
-        ax.set_title(f"Section: {section.replace('_', ' ').title()}")
+        ax.set_title(f"Sección: {section.replace('_', ' ').title()}")
         ax.set_xticks(x)
         ax.set_xticklabels([c.title() for c in conditions])
         if i == 0:
@@ -705,7 +705,7 @@ def _fig_kinematics_comparison(
             ax.legend(loc="lower right", fontsize=8)
 
     fig.suptitle(
-        "Aerodynamic (3D) vs Mechanical Pitch Adjustment — Velocity Triangles",
+        "Ajuste cinemático de paso: componente aerodinámica 3D vs mecánica",
         fontweight="bold",
     )
     fig.tight_layout()
@@ -729,7 +729,7 @@ def _fig_alpha_opt_by_condition(
             for c in conds
         ]
         bars = ax.bar(x + i * width, vals, width,
-                      label=section.replace("_", " ").title(),
+                      label=SECTION_LABELS.get(section, section),
                       color=SECTION_COLORS[section],
                       edgecolor="white", linewidth=0.6, zorder=3)
         ax.bar_label(bars, fmt="%.1f°", padding=3, fontsize=8)
@@ -737,7 +737,7 @@ def _fig_alpha_opt_by_condition(
     ax.set_xticklabels([c.title() for c in conds])
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel(r"$\alpha_{opt,3D}$ [°]")
-    ax.set_title("3D-Corrected Optimal Angle of Attack by Condition", pad=8)
+    ax.set_title(r"$\alpha_{opt}$ 3D (Snel) por condición de vuelo", pad=8)
     ax.legend()
     fig.tight_layout()
     fig.savefig(figures_dir / "alpha_opt_by_condition.png")
@@ -760,7 +760,7 @@ def _fig_pitch_adjustment(
             for c in conds
         ]
         bars = ax.bar(x + i * width, vals, width,
-                      label=section.replace("_", " ").title(),
+                      label=SECTION_LABELS.get(section, section),
                       color=SECTION_COLORS[section],
                       edgecolor="white", linewidth=0.6, zorder=3)
         ax.bar_label(bars, fmt="%.2f°", padding=3, fontsize=8)
@@ -769,7 +769,7 @@ def _fig_pitch_adjustment(
     ax.set_xticklabels([c.title() for c in conds])
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel(r"Required pitch adjustment $\Delta\alpha_{3D}$ [°]")
-    ax.set_title("Required Pitch Adjustment Relative to Cruise (3D Corrected)", pad=8)
+    ax.set_title(r"Ajuste de paso $\Delta\beta$ respecto a crucero (3D corregido)", pad=8)
     ax.legend()
     fig.tight_layout()
     fig.savefig(figures_dir / "pitch_adjustment.png")
@@ -857,7 +857,7 @@ def _fig_rotational_model_comparison(
     cc = _cond_colors()
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    fig.suptitle("Correcciones Rotacionales 3D — Snel vs Du-Selig (2000)", fontsize=11)
+    fig.suptitle("Correcciones rotacionales 3D: Snel vs Du-Selig", fontsize=11)
 
     x = np.arange(len(conds))
     n_sec = len(sections)
@@ -886,9 +886,9 @@ def _fig_rotational_model_comparison(
                 for c in conds
             ]
             col = list(cc.values())[i % len(cc)]
-            ax.bar(x + offset - width * 0.55, vals_snel, width, label=f"Snel/{section}" if i == 0 else f"_snel_{section}",
+            ax.bar(x + offset - width * 0.55, vals_snel, width, label=f"Snel / {SECTION_LABELS.get(section, section)}" if i == 0 else f"_snel_{section}",
                    color=col, alpha=0.85, edgecolor="white", linewidth=0.5, zorder=3)
-            ax.bar(x + offset + width * 0.55, vals_ds, width, label=f"DS/{section}" if i == 0 else f"_ds_{section}",
+            ax.bar(x + offset + width * 0.55, vals_ds, width, label=f"Du-Selig / {SECTION_LABELS.get(section, section)}" if i == 0 else f"_ds_{section}",
                    color=col, alpha=0.45, edgecolor=col, linewidth=0.8, linestyle="--", zorder=3)
 
         ax.set_xticks(x)
@@ -903,8 +903,8 @@ def _fig_rotational_model_comparison(
     legend_elements = []
     for i, sec in enumerate(sections):
         col = list(cc.values())[i % len(cc)]
-        legend_elements.append(Patch(facecolor=col, alpha=0.85, label=f"Snel/{sec}"))
-        legend_elements.append(Patch(facecolor=col, alpha=0.45, edgecolor=col, label=f"Du-Selig/{sec}"))
+        legend_elements.append(Patch(facecolor=col, alpha=0.85, label=f"Snel / {SECTION_LABELS.get(sec, sec)}"))
+        legend_elements.append(Patch(facecolor=col, alpha=0.45, edgecolor=col, label=f"Du-Selig / {SECTION_LABELS.get(sec, sec)}"))
     fig.legend(handles=legend_elements, loc="lower center", ncol=min(6, len(legend_elements)),
                fontsize=7.5, frameon=True, bbox_to_anchor=(0.5, -0.04))
 

@@ -174,7 +174,7 @@ class CompressibilityCorrectionService:
 
             ax_eff.set_xlabel(r"$\alpha$ [°]")
             ax_eff.set_ylabel(r"$C_L / C_D$")
-            ax_eff.set_title(r"Eficiencia aerodinámica $C_L/C_D$")
+            ax_eff.set_title(r"$C_L/C_D$ vs $\alpha$")
             ax_eff.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
             fig.savefig(output_path, bbox_inches="tight")
@@ -225,12 +225,12 @@ class CompressibilityCorrectionService:
 
                 ax_cl.set_xlabel(r"$\alpha$ [°]")
                 ax_cl.set_ylabel(r"$C_L$  (Kármán-Tsien)")
-                ax_cl.set_title(f"Comparación condiciones de vuelo — {section_label}")
+                ax_cl.set_title(f"$C_L$ vs $\\alpha$ por condición — Sección {section_label}")
                 ax_cl.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
                 ax_eff.set_xlabel(r"$\alpha$ [°]")
                 ax_eff.set_ylabel(r"$C_L / C_D$  (Kármán-Tsien)")
-                ax_eff.set_title(r"Eficiencia aerodinámica comparada")
+                ax_eff.set_title(r"$C_L/C_D$ vs $\alpha$ por condición")
                 ax_eff.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
                 out_path = base_output_dir / f"correction_comparison_{section}.png"

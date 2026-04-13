@@ -103,7 +103,7 @@ def _alpha_cruise_reference(ax: plt.Axes, alpha_val: float = _ALPHA_CRUISE_REF) 
         linestyle="--",
         linewidth=0.9,
         alpha=0.7,
-        label=rf"Cruise ref. $\alpha$ = {alpha_val:.1f}°",
+        label=rf"Referencia crucero — $\alpha$ = {alpha_val:.1f}°",
         zorder=2,
     )
 
@@ -233,7 +233,7 @@ def generate_efficiency_plots(
             ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
             ax.set_ylabel(r"Lift-to-drag ratio $C_L/C_D$ [–]")
             section_label = section.replace("_", " ").title()
-            ax.set_title(f"Aerodynamic Efficiency — {flight.title()} / {section_label}")
+            ax.set_title(f"Eficiencia aerodinámica — {flight.capitalize()} / {section_label}")
             ax.legend(loc="lower right")
             fig.tight_layout()
             fig.savefig(figures_dir / f"efficiency_{flight}_{section}.png")
@@ -300,7 +300,7 @@ def generate_efficiency_by_section(
         _alpha_cruise_reference(ax, alpha_cruise_ref)
         ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax.set_ylabel(r"Lift-to-drag ratio $C_L/C_D$ [–]")
-        ax.set_title(f"Efficiency by Blade Section — {flight.title()}")
+        ax.set_title(f"$C_L/C_D$ por sección de pala — {flight.capitalize()}")
         ax.legend(loc="lower right")
         fig.tight_layout()
         fig.savefig(figures_dir / f"efficiency_by_section_{flight}.png")
@@ -346,7 +346,7 @@ def generate_alpha_opt_vs_condition(
         color  = SECTION_COLORS[section]
         bars   = ax.bar(
             x + i * width, values, width,
-            label=section.replace("_", " ").title(),
+            label=section.replace("_", " ").title(),  # Root / Mid Span / Tip
             color=color, edgecolor="white", linewidth=0.6, zorder=3,
         )
         ax.bar_label(bars, fmt="%.1f°", padding=3, fontsize=8, fontweight="bold")
@@ -354,13 +354,13 @@ def generate_alpha_opt_vs_condition(
     ax.axhline(
         alpha_cruise_ref,
         color="0.35", linestyle="--", linewidth=1.0,
-        label=rf"Cruise ref. $\alpha$ = {alpha_cruise_ref:.1f}°",
+        label=rf"Referencia crucero — $\alpha$ = {alpha_cruise_ref:.1f}°",
         zorder=2,
     )
 
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel(r"Optimal angle of attack $\alpha_{opt}$ [°]")
-    ax.set_title(r"Optimal Angle of Attack by Flight Condition — Key Thesis Result", pad=10)
+    ax.set_title(r"$\alpha_{opt}$ por condición de vuelo y sección de pala", pad=10)
     ax.set_xticks(x + width)
     ax.set_xticklabels([fc.title() for fc in flight_conditions])
     ax.legend(loc="lower right")
@@ -444,17 +444,15 @@ def generate_section_polar_comparison(
 
         ax_eff.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax_eff.set_ylabel(r"$C_L/C_D$ (Prandtl-Glauert corrected) [–]")
-        ax_eff.set_title(f"Efficiency Polar — {flight.title()}\n"
-                         r"(★ = 2nd peak, actual operating point)")
+        ax_eff.set_title(f"Polar de eficiencia — {flight.capitalize()}")
         ax_eff.legend(loc="lower right")
 
         ax_cl.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax_cl.set_ylabel(r"$C_L$ (Prandtl-Glauert corrected) [–]")
-        ax_cl.set_title(f"Lift Polar — {flight.title()}\n"
-                        r"(★ = $\alpha_{opt}$ from efficiency peak)")
+        ax_cl.set_title(f"Polar de sustentación — {flight.capitalize()}")
         ax_cl.legend(loc="lower right")
 
-        fig.suptitle(f"NACA 65-410 — Section Comparison — {flight.title()}",
+        fig.suptitle(f"Comparación por sección de pala — {flight.capitalize()}",
                      fontsize=11, fontweight="bold")
         fig.tight_layout()
         fig.savefig(figures_dir / f"section_polar_comparison_{flight}.png")
@@ -532,7 +530,7 @@ def generate_cruise_penalty_figure(
                     marker="*", color="darkgreen", markersize=13,
                     markeredgecolor="white", markeredgewidth=1.0,
                     zorder=7, linestyle="none",
-                    label=rf"  VPF opt. $\alpha$ = {alpha_opt:.1f}° [{section_label}]",
+                    label=rf"$\alpha_{{opt}}$ VPF = {alpha_opt:.1f}° [{section_label}]",
                 )
                 if section == "mid_span":
                     mid_span_ld_opt  = ld_opt
@@ -550,7 +548,7 @@ def generate_cruise_penalty_figure(
         ax.axvline(
             alpha_cruise_design,
             color="#B22222", linestyle="--", linewidth=1.4, zorder=5,
-            label=rf"Fixed-pitch cruise $\alpha_{{design}}$ = {alpha_cruise_design:.1f}°",
+            label=rf"Paso fijo crucero — $\alpha_{{design}}$ = {alpha_cruise_design:.1f}°",
         )
 
         if mid_span_ld_opt is not None:
@@ -572,11 +570,7 @@ def generate_cruise_penalty_figure(
 
         ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax.set_ylabel(r"$C_L/C_D$ (Prandtl-Glauert corrected) [–]")
-        ax.set_title(
-            f"VPF Efficiency Gain — {condition.title()} Condition\n"
-            r"★ = VPF optimal $\alpha$   |   $\mathbf{-\,-}$ = fixed cruise pitch (penalty)",
-            pad=8,
-        )
+        ax.set_title(f"Ganancia de eficiencia VPF — {condition.capitalize()}", pad=8)
         ax.legend(loc="lower right", fontsize=8)
         fig.tight_layout()
         fig.savefig(figures_dir / f"cruise_penalty_{condition}.png")

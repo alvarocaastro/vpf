@@ -114,9 +114,9 @@ def _plot_fixed_vs_vpf_efficiency(
         vpf   = [next((r.cl_cd_vpf   for r in subset if r.blade_section == s), 0.0)
                  for s in _SECTIONS_ORDER]
 
-        bars_f = ax.bar(x - 0.20, fixed, 0.35, label="Paso fijo (α_diseño)",
+        bars_f = ax.bar(x - 0.20, fixed, 0.35, label=r"Paso fijo ($\alpha_{design}$)",
                         color=_COLOR_BASELINE, edgecolor="white", linewidth=0.5, zorder=3)
-        bars_v = ax.bar(x + 0.20, vpf,   0.35, label="VPF (α_opt)",
+        bars_v = ax.bar(x + 0.20, vpf,   0.35, label=r"VPF ($\alpha_{opt}$)",
                         color=_COLOR_VPF,      edgecolor="white", linewidth=0.5, zorder=3)
         ax.bar_label(bars_f, fmt="%.0f", padding=2, fontsize=7)
         ax.bar_label(bars_v, fmt="%.0f", padding=2, fontsize=7)
@@ -128,7 +128,7 @@ def _plot_fixed_vs_vpf_efficiency(
         ax.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
-        r"Eficiencia de perfil: Paso fijo (α_diseño) vs VPF (α_opt) por sección",
+        "Eficiencia de perfil: paso fijo vs VPF por sección de pala",
         fontsize=11, fontweight="bold", y=1.01,
     )
     fig.tight_layout()
@@ -180,15 +180,14 @@ def _plot_epsilon_spanwise(
                     rotation=90,
                 )
 
-    ax.axhline(1.0,  ls="-",  color="black",   lw=1.0, label="ε = 1  (sin beneficio)", zorder=4)
+    ax.axhline(1.0,  ls="-",  color="black",   lw=1.0, label=r"$\varepsilon = 1$ (sin beneficio)", zorder=4)
     ax.axhline(EPSILON_CAP, ls="--", color="#EE6677", lw=1.2,
-               label=f"ε cap = {EPSILON_CAP:.2f}  (Cumpsty 2004)", zorder=4)
+               label=rf"$\varepsilon_{{cap}}$ = {EPSILON_CAP:.2f} (Cumpsty 2004)", zorder=4)
     ax.set_xticks(x)
     ax.set_xticklabels([FLIGHT_LABELS.get(c, c) for c in conditions])
     ax.set_ylabel(r"Ratio de eficiencia ε$_{eff}$ = min(ε, cap) [–]")
     ax.set_title(
-        "Beneficio span-wise del VPF por condición de vuelo\n"
-        "(barras = ε capeado; anotaciones = ε bruto cuando excede el cap)",
+        r"Factor de eficiencia $\varepsilon_{eff}$ del VPF por condición de vuelo",
         fontweight="bold",
     )
     ax.set_ylim(0, 1.22)
@@ -221,12 +220,12 @@ def _plot_sfc_sensitivity_tau(
         ax.plot(tau_vals, y, marker="o", color=COLORS[cond],
                 label=FLIGHT_LABELS.get(cond, cond), linewidth=2, markersize=5)
 
-    ax.axvline(0.65, ls="--", color="gray", lw=1.2, alpha=0.8, label="τ nominal = 0.65")
+    ax.axvline(0.65, ls="--", color="gray", lw=1.2, alpha=0.8, label=r"$\tau$ nominal = 0.65")
     ax.axhspan(2.0, 5.0, alpha=0.08, color="#228833",
-               label="Rango literario 2–5% (Cumpsty 2004)")
+               label="Banda de referencia 2–5% (Cumpsty 2004)")
     ax.set_xlabel("Coeficiente de transferencia de eficiencia τ [–]")
     ax.set_ylabel("Reducción de SFC [%]")
-    ax.set_title("Sensibilidad del impacto en SFC al coeficiente τ", fontweight="bold")
+    ax.set_title(r"Sensibilidad del $\Delta$SFC al coeficiente de transferencia τ", fontweight="bold")
     ax.legend(fontsize=8)
     ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
@@ -254,7 +253,7 @@ def _plot_sfc_combined(
     fig, (ax_sfc, ax_pct) = plt.subplots(1, 2, figsize=(13, 5.5))
 
     # ── Panel izquierdo: SFC absoluto ───────────────────────────────────────
-    bars_b = ax_sfc.bar(x - width / 2, sfc_base, width, label="Paso fijo (baseline)",
+    bars_b = ax_sfc.bar(x - width / 2, sfc_base, width, label="Paso fijo (referencia)",
                         color=_COLOR_BASELINE, edgecolor="white", linewidth=0.6, zorder=3)
     bars_v = ax_sfc.bar(x + width / 2, sfc_new,  width, label="VPF (paso variable)",
                         color=_COLOR_VPF,      edgecolor="white", linewidth=0.6, zorder=3)
@@ -262,7 +261,7 @@ def _plot_sfc_combined(
     ax_sfc.bar_label(bars_v, fmt="%.4f", padding=3, fontsize=7)
     ax_sfc.set_xlabel("Condición de vuelo")
     ax_sfc.set_ylabel("SFC [lb/(lbf·hr)]")
-    ax_sfc.set_title("SFC: Baseline vs VPF", fontweight="bold")
+    ax_sfc.set_title("SFC absoluto: paso fijo vs VPF", fontweight="bold")
     ax_sfc.set_xticks(x)
     ax_sfc.set_xticklabels(labels)
     ax_sfc.legend(loc="lower right", fontsize=8)
@@ -274,17 +273,17 @@ def _plot_sfc_combined(
                         edgecolor="white", linewidth=0.6, zorder=3)
     ax_pct.bar_label(bars_r, fmt="%.2f%%", padding=3, fontsize=8, fontweight="bold")
     ax_pct.axhspan(2.0, 5.0, alpha=0.10, color="#228833",
-                   label="Rango literario 2–5%\n(Cumpsty 2004, p. 280)")
+                   label="Banda de referencia 2–5%\n(Cumpsty 2004, p. 280)")
     ax_pct.axhline(0, color="0.4", lw=0.8)
     ax_pct.set_xlabel("Condición de vuelo")
     ax_pct.set_ylabel("Reducción de SFC [%]")
-    ax_pct.set_title("Reducción de SFC — VPF vs Paso Fijo", fontweight="bold")
+    ax_pct.set_title("Reducción de SFC con VPF [%]", fontweight="bold")
     ax_pct.set_xticks(x)
     ax_pct.set_xticklabels(labels)
     ax_pct.legend(fontsize=8)
     ax_pct.grid(axis="y", alpha=0.3)
 
-    fig.suptitle("Impacto del Fan de Paso Variable en el SFC", fontsize=12,
+    fig.suptitle("Impacto del VPF en el consumo específico de combustible", fontsize=12,
                  fontweight="bold", y=1.01)
     fig.tight_layout()
     fig.savefig(figures_dir / "sfc_combined.png")
@@ -304,7 +303,7 @@ def _plot_fan_efficiency_improvement(
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(7.5, 5.0))
-    bars_b = ax.bar(x - width / 2, fan_baseline, width, label="Baseline (paso fijo)",
+    bars_b = ax.bar(x - width / 2, fan_baseline, width, label="Paso fijo (referencia)",
                     color=_COLOR_BASELINE, edgecolor="white", linewidth=0.6, zorder=3)
     bars_v = ax.bar(x + width / 2, fan_new, width, label="VPF (paso variable)",
                     color=_COLOR_VPF, edgecolor="white", linewidth=0.6, zorder=3)
@@ -312,7 +311,7 @@ def _plot_fan_efficiency_improvement(
     ax.bar_label(bars_v, fmt="%.1f%%", padding=3, fontsize=7)
     ax.set_xlabel("Condición de vuelo")
     ax.set_ylabel("Eficiencia isentrópica de fan [%]")
-    ax.set_title("Eficiencia de Fan: Baseline vs VPF", fontweight="bold")
+    ax.set_title("Eficiencia isentrópica del fan: paso fijo vs VPF", fontweight="bold")
     ax.set_xticks(x)
     ax.set_xticklabels([FLIGHT_LABELS.get(c, c) for c in conditions])
     ax.legend(loc="lower right")
@@ -357,10 +356,10 @@ def _plot_efficiency_mechanism_breakdown(
     fig, (ax_eta, ax_sfc) = plt.subplots(1, 2, figsize=(13, 5.5))
 
     # ── Panel izquierdo: Δη desglosado (barras apiladas) ────────────────
-    bars_p = ax_eta.bar(x, d_eta_prof, 0.55, label="Mecanismo de perfil\n(CL/CD → fan vía τ)",
+    bars_p = ax_eta.bar(x, d_eta_prof, 0.55, label=r"Perfil ($C_L/C_D$ → fan, vía τ)",
                         color=_COLOR_PROFILE, edgecolor="white", linewidth=0.6, zorder=3)
     bars_m = ax_eta.bar(x, d_eta_map, 0.55, bottom=d_eta_prof,
-                        label="Mecanismo de mapa\n(recuperación pérdida φ)",
+                        label="Mapa φ (recuperación de pérdida)",
                         color=_COLOR_MAP, edgecolor="white", linewidth=0.6, zorder=3)
 
     # Etiqueta del total
@@ -372,7 +371,7 @@ def _plot_efficiency_mechanism_breakdown(
     ax_eta.set_xticks(x)
     ax_eta.set_xticklabels(labels)
     ax_eta.set_ylabel("Mejora de eficiencia de fan Δη [pp]")
-    ax_eta.set_title("Desglose por mecanismo físico VPF", fontweight="bold")
+    ax_eta.set_title(r"Mejora de $\eta_{fan}$: desglose por mecanismo físico", fontweight="bold")
     ax_eta.legend(fontsize=8, loc="upper right")
     ax_eta.grid(axis="y", alpha=0.3)
 
@@ -388,7 +387,7 @@ def _plot_efficiency_mechanism_breakdown(
             frac_prof.append(0.0)
             frac_map.append(0.0)
 
-    ax_sfc.bar(x, frac_prof, 0.55, label="Perfil", color=_COLOR_PROFILE,
+    ax_sfc.bar(x, frac_prof, 0.55, label=r"Perfil ($C_L/C_D$)", color=_COLOR_PROFILE,
                edgecolor="white", linewidth=0.6, zorder=3)
     ax_sfc.bar(x, frac_map, 0.55, bottom=frac_prof, label="Mapa φ",
                color=_COLOR_MAP, edgecolor="white", linewidth=0.6, zorder=3)
@@ -396,12 +395,12 @@ def _plot_efficiency_mechanism_breakdown(
     ax_sfc.set_xticklabels(labels)
     ax_sfc.set_ylim(0, 115)
     ax_sfc.set_ylabel("Fracción de la ganancia total [%]")
-    ax_sfc.set_title("Contribución relativa de cada mecanismo", fontweight="bold")
+    ax_sfc.set_title(r"Fracción de la mejora $\Delta\eta_{fan}$ por mecanismo [%]", fontweight="bold")
     ax_sfc.legend(fontsize=8, loc="upper right")
     ax_sfc.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
-        "Dos mecanismos independientes de beneficio del Fan de Paso Variable (VPF)",
+        "Mecanismos físicos de mejora del VPF",
         fontsize=11, fontweight="bold", y=1.01,
     )
     fig.tight_layout()
@@ -503,7 +502,7 @@ def _plot_mission_fuel_burn(
     bar_colors = [cond_colors.get(p.phase, "#888888") for p in phase_results]
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-    fig.suptitle("Integración de Misión — Ahorro de Combustible con VPF", fontsize=11)
+    fig.suptitle("Ahorro de combustible y reducción de CO₂ con VPF — Análisis de misión", fontsize=11)
 
     # Panel izquierdo: combustible baseline vs ahorro (apilado)
     ax = axes[0]
@@ -522,7 +521,7 @@ def _plot_mission_fuel_burn(
     ax.set_xticks(x)
     ax.set_xticklabels(phase_labels)
     ax.set_ylabel("Combustible quemado [kg]")
-    ax.set_title("Consumo por fase", fontsize=9)
+    ax.set_title("Ahorro de combustible por fase [kg]", fontsize=9)
     ax.grid(axis="y", linewidth=0.4, zorder=0)
     ax.set_axisbelow(True)
     ax.legend(fontsize=8, loc="upper right")

@@ -151,7 +151,7 @@ class FinalAnalysisService:
             ax_eff.set_xlabel(r"$\alpha$ [°]")
             ax_eff.set_ylabel(r"$C_L/C_D$")
             ax_eff.set_title(
-                f"Eficiencia — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
+                f"Eficiencia aerodinámica — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
             )
             ax_eff.legend(loc="lower right")
             fig_eff.tight_layout()
@@ -184,7 +184,7 @@ class FinalAnalysisService:
             ax_cl.set_xlabel(r"$\alpha$ [°]")
             ax_cl.set_ylabel(r"$C_L$")
             ax_cl.set_title(
-                f"Curva de sustentación — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
+                f"$C_L$ vs $\\alpha$ — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
             )
             ax_cl.legend(
                 bbox_to_anchor=(0.5, -0.22), loc="upper center",
@@ -200,7 +200,7 @@ class FinalAnalysisService:
             ax_pol.set_xlabel(r"$C_D$")
             ax_pol.set_ylabel(r"$C_L$")
             ax_pol.set_title(
-                f"Polar aerodinámica — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
+                f"Polar $C_L$–$C_D$ — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
             )
             fig_pol.tight_layout()
             fig_pol.savefig(out_dir / "polar_plot.png")
