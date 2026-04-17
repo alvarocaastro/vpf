@@ -3,7 +3,7 @@ run_analysis.py
 ---------------
 Punto de entrada del pipeline aerodinámico completo del análisis VPF.
 
-Ejecuta 7 pasos en secuencia con I/O explícito entre stages:
+Ejecuta 8 pasos en secuencia con I/O explícito entre stages:
 
   1. Limpiar resultados anteriores
   2. Stage 1 — Selección de perfil aerodinámico  → Stage1Result
@@ -11,7 +11,8 @@ Ejecuta 7 pasos en secuencia con I/O explícito entre stages:
   4. Stage 3 — Correcciones de compresibilidad   → Stage3Result
   5. Stage 4 — Métricas de rendimiento + figuras → Stage4Result
   6. Stage 5 — Pitch & Kinematics (3D completo)  → Stage5Result
-  7. Stage 6 — Análisis SFC                      → Stage6Result
+  7. Stage 6 — Reverse Thrust Modeling           → Stage6Result
+  8. Stage 7 — Análisis SFC                      → Stage7Result
 
 Cada step valida sus outputs antes de pasar al siguiente, garantizando
 que ningún stage se ejecuta con datos incompletos o inconsistentes.
@@ -44,6 +45,7 @@ from vfp_analysis.pipeline.contracts import (
     Stage4Result,
     Stage5Result,
     Stage6Result,
+    Stage7Result,
 )
 from vfp_analysis.postprocessing.stage_summary_generator import (
     generate_stage1_summary,
@@ -89,6 +91,9 @@ from vfp_analysis.stage4_performance_metrics.table_generator import (
 )
 from vfp_analysis.stage5_pitch_kinematics.application.run_pitch_kinematics import (
     run_pitch_kinematics,
+)
+from vfp_analysis.stage6_reverse_thrust.application.run_reverse_thrust import (
+    run_reverse_thrust,
 )
 from vfp_analysis.stage6_sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
 
@@ -526,24 +531,83 @@ def step_6_pitch_kinematics() -> Stage5Result:
 
 
 # ---------------------------------------------------------------------------
-# Paso 7 — Stage 6
+# Paso 7 — Stage 6: Reverse Thrust
 # ---------------------------------------------------------------------------
 
-def step_7_sfc_analysis() -> Stage6Result:
-    """Stage 6: Impacto del VPF en el consumo específico de combustible.
+def step_7_reverse_thrust() -> Stage6Result:
+    """Stage 6: VPF Reverse Thrust Modeling.
 
     Returns
     -------
     Stage6Result
-        Directorios y reducción media de SFC.
+        Optimal reverse pitch angle, thrust fraction, mechanism weight
+        and cruise SFC penalty.
     """
-    _section("PASO 7 / STAGE 6: SFC Impact Analysis")
+    _section("PASO 7 / STAGE 6: Reverse Thrust Modeling")
 
-    run_sfc_analysis()
+    run_reverse_thrust()
 
     stage6_dir  = base_config.get_stage_dir(6)
     tables_dir  = stage6_dir / "tables"
     figures_dir = stage6_dir / "figures"
+
+    n_tables  = len(list(tables_dir.glob("*.csv")))  if tables_dir.exists()  else 0
+    n_figures = len(list(figures_dir.glob("*.png"))) if figures_dir.exists() else 0
+
+    # Extract key metrics
+    beta_opt   = float("nan")
+    thrust_frac = float("nan")
+    mech_weight = float("nan")
+    sfc_penalty = float("nan")
+
+    import pandas as _pd
+
+    opt_file = tables_dir / "reverse_thrust_optimal.csv"
+    if opt_file.exists():
+        df_opt = _pd.read_csv(opt_file).set_index("metric")["value"]
+        beta_opt    = float(df_opt.get("beta_opt_mid_deg", float("nan")))
+        thrust_frac = float(df_opt.get("thrust_fraction_pct", float("nan"))) / 100.0
+
+    mw_file = tables_dir / "mechanism_weight.csv"
+    if mw_file.exists():
+        df_mw = _pd.read_csv(mw_file).set_index("metric")["value"]
+        mech_weight = float(df_mw.get("mechanism_weight_kg", float("nan")))
+        sfc_penalty = float(df_mw.get("sfc_cruise_penalty_pct", float("nan")))
+
+    s6 = Stage6Result(
+        tables_dir=tables_dir,
+        figures_dir=figures_dir,
+        n_tables=n_tables,
+        n_figures=n_figures,
+        beta_opt_deg=beta_opt,
+        thrust_fraction=thrust_frac,
+        mechanism_weight_kg=mech_weight,
+        sfc_cruise_penalty_pct=sfc_penalty,
+        stage_dir=stage6_dir,
+    )
+    s6.validate()
+    return s6
+
+
+# ---------------------------------------------------------------------------
+# Paso 8 — Stage 7: SFC Analysis
+# ---------------------------------------------------------------------------
+
+def step_8_sfc_analysis() -> Stage7Result:
+    """Stage 7: Impacto del VPF en el consumo específico de combustible.
+
+    Returns
+    -------
+    Stage7Result
+        Directorios y reducción media de SFC.
+    """
+    _section("PASO 8 / STAGE 7: SFC Impact Analysis")
+
+    run_sfc_analysis()
+
+    stage7_dir  = base_config.get_stage_dir(7)
+    tables_dir  = stage7_dir / "tables"
+    figures_dir = stage7_dir / "figures"
 
     mean_sfc_reduction = float("nan")
     sfc_file = tables_dir / "sfc_analysis.csv"
@@ -556,14 +620,14 @@ def step_7_sfc_analysis() -> Stage6Result:
         if col:
             mean_sfc_reduction = float(df_sfc[col].mean(skipna=True))
 
-    s6 = Stage6Result(
+    s7 = Stage7Result(
         tables_dir=tables_dir,
         figures_dir=figures_dir,
         mean_sfc_reduction_pct=mean_sfc_reduction,
-        stage_dir=stage6_dir,
+        stage_dir=stage7_dir,
     )
-    s6.validate()
-    return s6
+    s7.validate()
+    return s7
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +647,8 @@ def main() -> None:
         s3 = step_4_compressibility_correction(s2)
         s4 = step_5_metrics_and_figures(s3)
         s5 = step_6_pitch_kinematics()
-        s6 = step_7_sfc_analysis()
+        s6 = step_7_reverse_thrust()
+        s7 = step_8_sfc_analysis()
 
         LOGGER.info("=" * 80)
         LOGGER.info("Pipeline completado con éxito.")
@@ -597,10 +662,13 @@ def main() -> None:
         LOGGER.info("  Stage 4: %d métricas calculadas", len(s4.metrics))
         LOGGER.info("  Stage 5: %d tablas, %d figuras | twist=%.1f° | pérdida_max=%.1f%%",
                     s5.n_tables, s5.n_figures, s5.twist_total_deg, s5.max_off_design_loss_pct)
-        LOGGER.info("  Stage 6: reducción SFC media = %.2f%%", s6.mean_sfc_reduction_pct)
+        LOGGER.info("  Stage 6: β_opt=%.1f° | T_rev=%.1f%% fwd | mecanismo=%.0f kg | ΔSFC=+%.3f%%",
+                    s6.beta_opt_deg, s6.thrust_fraction * 100,
+                    s6.mechanism_weight_kg, s6.sfc_cruise_penalty_pct)
+        LOGGER.info("  Stage 7: reducción SFC media = %.2f%%", s7.mean_sfc_reduction_pct)
         LOGGER.info("")
         LOGGER.info("Resultados en:")
-        for stage_num, stage_name in base_config.STAGE_DIR_NAMES.items():
+        for stage_num, stage_name in sorted(base_config.STAGE_DIR_NAMES.items()):
             LOGGER.info("  Stage %d: %s", stage_num, base_config.RESULTS_DIR / stage_name)
         LOGGER.info("=" * 80)
 

@@ -51,3 +51,43 @@ mission:
   design_thrust_kN: 105.0
   # Jet-A1 price [USD/kg] — IATA average 2023-2024
   fuel_price_usd_per_kg: 0.90
+
+# ---------------------------------------------------------
+# REVERSE THRUST MODEL (Stage 6)
+# ---------------------------------------------------------
+# VPF achieves reverse thrust by rotating blade pitch to negative angles
+# while the fan keeps spinning in the same direction.
+# Unlike cascade reversers, no blocker doors or nacelle cascade ducts are
+# needed — the fan itself generates the braking force.
+reverse_thrust:
+  # Fan operating conditions during reverse thrust
+  n1_fraction: 0.65              # Fraction of design N1 (RPM) during reverse
+  va_landing_m_s: 60.0           # Representative axial airspeed during ground roll [m/s]
+                                  # Reversers engaged at ~75 m/s, averaged over roll ~60 m/s
+  rho_sl_kg_m3: 1.225            # ISA sea-level air density [kg/m³]
+
+  # Blade pitch sweep (delta relative to beta_metal_cruise from Stage 5)
+  delta_beta_min_deg: -25.0      # Most negative pitch offset
+  delta_beta_max_deg: -5.0       # Least negative (near feathering point)
+  delta_beta_steps: 41           # Points in sweep
+
+  # Validity criteria and target
+  target_thrust_fraction: 0.40   # Target: 40% of forward takeoff thrust in reverse
+  stall_margin_min: 0.0          # Min stall margin fraction (0 = at stall boundary)
+
+  # Blade geometry — GE9X fan (Z=16 blades, wide-chord composite)
+  n_blades: 16
+  chord_m:
+    root: 0.36
+    mid_span: 0.46
+    tip: 0.46
+
+  # VPF mechanism weight — basis for Stage 7 SFC cruise penalty
+  # The VPF actuator ring + pitch links + blade-root reinforcement weigh ~4% of
+  # engine dry weight, vs ~10% for a conventional cascade reverser
+  # (cascades + blocker doors + nacelle structural reinforcement).
+  # Net weight saving vs conventional: ~6% × dry weight × 2 engines ≈ 950 kg.
+  engine_dry_weight_kg: 7930.0           # GE9X-1B dry weight per engine [kg]
+  mechanism_weight_fraction: 0.04        # VPF actuator mechanism as fraction of dry weight
+  conventional_reverser_fraction: 0.10   # Cascade reverser fraction for comparison
+  aircraft_L_D: 18.0                     # Cruise L/D ratio (B777X)

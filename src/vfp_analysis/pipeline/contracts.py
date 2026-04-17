@@ -216,22 +216,71 @@ class Stage5Result:
 
 
 # ---------------------------------------------------------------------------
-# Stage 6 — SFC Analysis
+# Stage 6 — Reverse Thrust Modeling
 # ---------------------------------------------------------------------------
 
 @dataclass
 class Stage6Result:
-    """Salida del Stage 6: impacto del VPF en el consumo específico de combustible.
+    """Salida del Stage 6: modelado de empuje reverso VPF.
+
+    Inputs del stage
+    ----------------
+    - ``Stage5Result.tables_dir`` (blade_twist_design.csv)
+    - ``results/stage3_compressibility_correction/takeoff/`` polars
+    - ``engine_parameters.yaml`` (reverse_thrust section)
+
+    Outputs
+    -------
+    - ``tables_dir``: 4 CSVs (kinematics, sweep, optimal, mechanism_weight)
+    - ``figures_dir``: 4 PNG figures
+    - ``beta_opt_deg``: optimal blade angle at mid-span in reverse [°]
+    - ``thrust_fraction``: achieved |T_rev| / T_forward_takeoff [0–1]
+    - ``mechanism_weight_kg``: VPF mechanism weight both engines [kg]
+    - ``sfc_cruise_penalty_pct``: cruise SFC increase from mechanism weight [%]
+    """
+    tables_dir: Path
+    figures_dir: Path
+    n_tables: int
+    n_figures: int
+    beta_opt_deg: float
+    thrust_fraction: float
+    mechanism_weight_kg: float
+    sfc_cruise_penalty_pct: float
+    stage_dir: Path
+
+    def validate(self) -> None:
+        from vfp_analysis.validation.validators import require_dir
+        require_dir(self.stage_dir, "Stage 6 results dir")
+        require_dir(self.tables_dir, "Stage 6 tables dir")
+        require_dir(self.figures_dir, "Stage 6 figures dir")
+        if self.n_tables < 4:
+            raise ValueError(f"Stage 6: {self.n_tables} tablas (se esperan ≥4)")
+        if not (0.0 < self.thrust_fraction < 1.0):
+            raise ValueError(
+                f"Stage 6: thrust_fraction fuera de rango físico: {self.thrust_fraction}"
+            )
+        if self.mechanism_weight_kg <= 0:
+            raise ValueError("Stage 6: mechanism_weight_kg debe ser positivo")
+
+
+# ---------------------------------------------------------------------------
+# Stage 7 — SFC Analysis
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Stage7Result:
+    """Salida del Stage 7: impacto del VPF en el consumo específico de combustible.
 
     Inputs del stage
     ----------------
     - ``Stage5Result.tables_dir`` (optimal_incidence.csv)
+    - ``Stage6Result.tables_dir`` (mechanism_weight.csv)
     - ``engine_parameters.yaml``
 
     Outputs
     -------
     - ``tables_dir``: sfc_analysis.csv
-    - ``figures_dir``: 4 figuras
+    - ``figures_dir``: figuras
     - ``mean_sfc_reduction_pct``: reducción media de SFC [%]
     """
     tables_dir: Path
@@ -241,11 +290,11 @@ class Stage6Result:
 
     def validate(self) -> None:
         from vfp_analysis.validation.validators import require_dir
-        require_dir(self.stage_dir, "Stage 6 results dir")
-        require_dir(self.tables_dir, "Stage 6 tables dir")
-        require_dir(self.figures_dir, "Stage 6 figures dir")
+        require_dir(self.stage_dir, "Stage 7 results dir")
+        require_dir(self.tables_dir, "Stage 7 tables dir")
+        require_dir(self.figures_dir, "Stage 7 figures dir")
         if math.isnan(self.mean_sfc_reduction_pct):
             raise ValueError(
-                "Stage 6: mean_sfc_reduction_pct es NaN — "
+                "Stage 7: mean_sfc_reduction_pct es NaN — "
                 "revisar que sfc_analysis.csv contiene columna 'sfc_reduction'"
             )
