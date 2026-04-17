@@ -119,6 +119,14 @@ class PhysicsConstants:
     MACH_MAX_SUBSONIC: float = 0.99
     """Mach máximo para análisis subsónico (M < 1 estrictamente)."""
 
+    MACH_KT_VALID_MAX: float = 0.87
+    """Upper Mach limit for Kármán-Tsien validity.
+    Above this value (cruise M=0.93 on relative blade frame) KT's non-linear
+    denominator approaches singularity and the correction over-predicts CL.
+    Fall back to Prandtl-Glauert, which is conservative but remains monotonic.
+    Ref: Moran (2003) 'Introduction to Theoretical and Computational Aerodynamics',
+    ch. 9; Abbott & von Doenhoff (1959) p. 116."""
+
 
 @dataclass(frozen=True)
 class XfoilSettings:

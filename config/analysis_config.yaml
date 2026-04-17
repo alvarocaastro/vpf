@@ -36,12 +36,17 @@ reynolds:
     tip: 10.2e6      # W_rel=411 m/s, c=0.46 m
 
 # Ncrit (transition parameter) for each flight condition
-# Fan turbulence intensity ~1-2% → Ncrit ~ 5-6 (turbomachinery inflow)
+# Turbofan fan inlet turbulence intensity ~0.5-1 % → Ncrit ~ 3-4
+# Formula: Ncrit = -8.43 - 2.4*ln(Tu);  Tu=0.5% → 4.3, Tu=1% → 2.6
+# Using 4 for all phases (conservative turbomachinery value).
+# Previous value of 5-6 corresponded to Tu≈0.1-0.3 % (clean wind-tunnel),
+# which over-estimates laminar run length for fan inflow.
+# Ref: Mack (1977); Drela & Youngren XFOIL 6.9 docs, sec. 4.
 ncrit:
-  takeoff: 5.0
-  climb:   5.0
-  cruise:  6.0
-  descent: 5.0
+  takeoff: 4.0
+  climb:   4.0
+  cruise:  4.0
+  descent: 4.0
 
 # Angle of attack range for simulations
 alpha:
@@ -58,7 +63,7 @@ selection_alpha:
 # Selection stage parameters
 selection:
   reynolds: 3.0e6
-  ncrit: 6.0
+  ncrit: 4.0
 
 # XFOIL solver settings
 # Tuning these avoids editing Python source. All values match XfoilSettings defaults.

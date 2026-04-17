@@ -30,6 +30,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 import math
 
 import pandas as pd
@@ -41,6 +42,8 @@ from vfp_analysis.stage3_compressibility_correction.critical_mach import (
     wave_drag_increment,
     estimate_mdd,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 class KarmanTsienModel:
@@ -80,13 +83,32 @@ class KarmanTsienModel:
         pd.DataFrame
             df with additional columns cl_kt, ld_kt, cd_corrected.
         """
+        from vfp_analysis.settings import get_settings
+        kt_max = get_settings().physics.MACH_KT_VALID_MAX
+
         df_out = df.copy()
         cl_0 = df["cl"].values
         m_ref = case.reference_mach
         m_tgt = case.target_mach
 
+        kt_valid = m_tgt <= kt_max
+        if not kt_valid:
+            LOGGER.warning(
+                "M_target=%.3f exceeds KT validity limit (%.2f). "
+                "Falling back to Prandtl-Glauert for cl_kt.",
+                m_tgt, kt_max,
+            )
+
         cl_kt = []
-        for cl in cl_0:
+        for i, cl in enumerate(cl_0):
+            if not kt_valid:
+                # Use PG value when available, else recompute from cl_0
+                if "cl_pg" in df.columns:
+                    cl_kt.append(float(df["cl_pg"].iloc[i]))
+                else:
+                    beta = math.sqrt(max(1.0 - m_tgt * m_tgt, 1e-9))
+                    cl_kt.append(cl / beta)
+                continue
             denom_tgt = self._kt_denominator(cl, m_tgt)
             denom_ref = self._kt_denominator(cl, m_ref)
             # Avoid division by zero near stall (large negative CL or near-zero denominator)
