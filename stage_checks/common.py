@@ -1,15 +1,16 @@
 """
 common.py
 ---------
-Shared logic for stage check scripts (Stages 1–6).
+Shared logic for stage check scripts (Stages 1–7).
 
 Pipeline step mapping:
-    Stage 1  → step_2_airfoil_selection()       → Stage1Result
-    Stage 2  → step_3_xfoil_simulations(s1)     → Stage2Result
+    Stage 1  → step_2_airfoil_selection()            → Stage1Result
+    Stage 2  → step_3_xfoil_simulations(s1)          → Stage2Result
     Stage 3  → step_4_compressibility_correction(s2) → Stage3Result
-    Stage 4  → step_5_metrics_and_figures(s3)   → Stage4Result
-    Stage 5  → step_6_pitch_kinematics()        → Stage5Result
-    Stage 6  → step_7_sfc_analysis()            → Stage6Result
+    Stage 4  → step_5_metrics_and_figures(s3)        → Stage4Result
+    Stage 5  → step_6_pitch_kinematics()             → Stage5Result
+    Stage 6  → step_7_reverse_thrust()               → Stage6Result
+    Stage 7  → step_8_sfc_analysis()                 → Stage7Result
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from vfp_analysis.pipeline.contracts import (
     Stage4Result,
     Stage5Result,
     Stage6Result,
+    Stage7Result,
 )
 
 
@@ -81,6 +83,14 @@ def _validate_stage_outputs(stage_num: int) -> list[str]:
         ]
     elif stage_num == 6:
         checks = [
+            (stage_dir / "tables" / "reverse_kinematics.csv",    "tabla cinemática reversa"),
+            (stage_dir / "tables" / "reverse_thrust_sweep.csv",  "tabla barrido de empuje inverso"),
+            (stage_dir / "tables" / "reverse_thrust_optimal.csv","tabla punto óptimo reversa"),
+            (stage_dir / "tables" / "mechanism_weight.csv",      "tabla peso del mecanismo"),
+            (stage_dir / "figures",                               "directorio de figuras"),
+        ]
+    elif stage_num == 7:
+        checks = [
             (stage_dir / "tables" / "sfc_analysis.csv",          "tabla SFC agregada"),
             (stage_dir / "tables" / "sfc_section_breakdown.csv", "tabla SFC por sección"),
             (stage_dir / "tables" / "sfc_sensitivity.csv",       "tabla sensibilidad tau"),
@@ -109,7 +119,12 @@ def _validate_stage_outputs(stage_num: int) -> list[str]:
         messages.append(f"[INFO] Tablas Stage 5:  {_existing_count(tables_dir, '*.csv')}")
     elif stage_num == 6:
         figures_dir = stage_dir / "figures"
+        tables_dir = stage_dir / "tables"
         messages.append(f"[INFO] Figuras Stage 6: {_existing_count(figures_dir, '*.png')}")
+        messages.append(f"[INFO] Tablas Stage 6:  {_existing_count(tables_dir, '*.csv')}")
+    elif stage_num == 7:
+        figures_dir = stage_dir / "figures"
+        messages.append(f"[INFO] Figuras Stage 7: {_existing_count(figures_dir, '*.png')}")
 
     return messages
 
@@ -127,8 +142,6 @@ def _cached_s1() -> Stage1Result | None:
         name = dat.read_text().splitlines()[0].strip()
     except Exception:
         name = dat.stem
-    from vfp_analysis.core.domain.airfoil import Airfoil
-    airfoil = Airfoil(name=name, family="", dat_path=dat)
     return Stage1Result(
         selected_airfoil_name=name,
         selected_airfoil_dat=dat,
@@ -169,10 +182,6 @@ def _cached_s4() -> Stage4Result | None:
     stage_dir = base_config.get_stage_dir(4)
     if not (stage_dir / "tables" / "summary_table.csv").is_file():
         return None
-    import pandas as pd
-    from vfp_analysis.stage4_performance_metrics.metrics import AerodynamicMetrics
-    # Return a minimal result — metrics list left empty (only needed for downstream stages
-    # that read from disk anyway)
     return Stage4Result(
         metrics=[],
         tables_dir=stage_dir / "tables",
@@ -199,6 +208,61 @@ def _cached_s5() -> Stage5Result | None:
     )
 
 
+def _cached_s6() -> Stage6Result | None:
+    stage_dir = base_config.get_stage_dir(6)
+    tables_dir = stage_dir / "tables"
+    optimal_path = tables_dir / "reverse_thrust_optimal.csv"
+    mw_path = tables_dir / "mechanism_weight.csv"
+    if not optimal_path.is_file() or not mw_path.is_file():
+        return None
+    try:
+        import pandas as pd
+        idx_opt = pd.read_csv(optimal_path).set_index("metric")["value"]
+        idx_mw = pd.read_csv(mw_path).set_index("metric")["value"]
+        beta_opt = float(idx_opt.get("beta_opt_mid_deg", float("nan")))
+        thrust_fraction = float(idx_opt.get("thrust_fraction_pct", float("nan"))) / 100.0
+        mechanism_weight_kg = float(idx_mw.get("mechanism_weight_kg", float("nan")))
+        sfc_penalty = float(idx_mw.get("sfc_cruise_penalty_pct", float("nan")))
+    except Exception:
+        beta_opt = float("nan")
+        thrust_fraction = float("nan")
+        mechanism_weight_kg = float("nan")
+        sfc_penalty = float("nan")
+    n_tables = _existing_count(tables_dir, "*.csv")
+    n_figures = _existing_count(stage_dir / "figures", "*.png")
+    return Stage6Result(
+        tables_dir=tables_dir,
+        figures_dir=stage_dir / "figures",
+        n_tables=n_tables,
+        n_figures=n_figures,
+        beta_opt_deg=beta_opt,
+        thrust_fraction=thrust_fraction,
+        mechanism_weight_kg=mechanism_weight_kg,
+        sfc_cruise_penalty_pct=sfc_penalty,
+        stage_dir=stage_dir,
+    )
+
+
+def _cached_s7() -> Stage7Result | None:
+    stage_dir = base_config.get_stage_dir(7)
+    sfc_file = stage_dir / "tables" / "sfc_analysis.csv"
+    if not sfc_file.is_file():
+        return None
+    try:
+        import pandas as pd
+        df = pd.read_csv(sfc_file)
+        col = next((c for c in df.columns if "sfc_reduction" in c.lower()), None)
+        mean_red = float(df[col].mean(skipna=True)) if col else float("nan")
+    except Exception:
+        mean_red = float("nan")
+    return Stage7Result(
+        tables_dir=stage_dir / "tables",
+        figures_dir=stage_dir / "figures",
+        mean_sfc_reduction_pct=mean_red,
+        stage_dir=stage_dir,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main check runner
 # ---------------------------------------------------------------------------
@@ -208,12 +272,12 @@ def run_stage_check(stage_num: int, clean: bool = True, cache: bool = False) -> 
 
     Parameters
     ----------
-    stage_num : int   Target stage (1–6).
+    stage_num : int   Target stage (1–7).
     clean : bool      Wipe previous results before running (ignored in cache mode).
     cache : bool      Skip re-running stages whose artifacts already exist on disk.
     """
-    if stage_num < 1 or stage_num > 6:
-        raise ValueError("stage_num must be between 1 and 6")
+    if stage_num < 1 or stage_num > 7:
+        raise ValueError("stage_num must be between 1 and 7")
 
     if cache:
         clean = False
@@ -283,16 +347,26 @@ def run_stage_check(stage_num: int, clean: bool = True, cache: bool = False) -> 
             s5 = run_analysis.step_6_pitch_kinematics()
             print(f"[INFO] Tablas: {s5.n_tables}  Figuras: {s5.n_figures}")
 
-    # ── Stage 6 — análisis de SFC ───────────────────────────────────────────
+    # ── Stage 6 — modelado de reversa de empuje ─────────────────────────────
     if stage_num >= 6:
-        stage6_dir = base_config.get_stage_dir(6)
-        cached_s6 = cache and (stage6_dir / "tables" / "sfc_analysis.csv").is_file()
-        if cached_s6:
-            print("[CACHE] Stage 6 — SFC en disco")
+        if cache and (r := _cached_s6()) is not None:
+            s6 = r
+            print(f"[CACHE] Stage 6 — beta_opt={s6.beta_opt_deg:.1f} deg thrust_frac={s6.thrust_fraction:.3f}")
         else:
-            print("[RUN] Stage 6 — análisis de SFC")
-            s6 = run_analysis.step_7_sfc_analysis()
-            print(f"[INFO] Reducción media SFC: {s6.mean_sfc_reduction_pct:.2f}%")
+            print("[RUN] Stage 6 — modelado de reversa de empuje (BEM)")
+            s6 = run_analysis.step_7_reverse_thrust()
+            print(f"[INFO] beta_opt: {s6.beta_opt_deg:.1f} deg  thrust_fraction: {s6.thrust_fraction:.3f}")
+            print(f"[INFO] Mecanismo: {s6.mechanism_weight_kg:.0f} kg  penalizacion SFC: +{s6.sfc_cruise_penalty_pct:.3f}%")
+
+    # ── Stage 7 — análisis de SFC ───────────────────────────────────────────
+    if stage_num >= 7:
+        if cache and (r := _cached_s7()) is not None:
+            s7 = r
+            print(f"[CACHE] Stage 7 — reducción media SFC: {s7.mean_sfc_reduction_pct:.2f}%")
+        else:
+            print("[RUN] Stage 7 — análisis de SFC")
+            s7 = run_analysis.step_8_sfc_analysis()
+            print(f"[INFO] Reducción media SFC: {s7.mean_sfc_reduction_pct:.2f}%")
 
     print("-" * 80)
     for line in _validate_stage_outputs(stage_num):

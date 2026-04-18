@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from typing import List, Tuple  # noqa: F401 — Tuple used in type comments
 
-from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
+from vfp_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
     EPSILON_CAP,
     ETA_FAN_ABS_CAP,
     ETA_FAN_COMBINED_CAP,

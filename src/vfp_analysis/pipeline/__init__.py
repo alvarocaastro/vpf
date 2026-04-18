@@ -7,6 +7,7 @@ from vfp_analysis.pipeline.contracts import (
     Stage4Result,
     Stage5Result,
     Stage6Result,
+    Stage7Result,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "Stage4Result",
     "Stage5Result",
     "Stage6Result",
+    "Stage7Result",
 ]

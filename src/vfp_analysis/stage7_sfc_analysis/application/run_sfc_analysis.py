@@ -10,7 +10,7 @@ Inputs:
     results/stage4_performance_metrics/tables/summary_table.csv
     config/engine_parameters.yaml
 
-Outputs (en results/stage6_sfc_analysis/):
+Outputs (en results/stage7_sfc_analysis/):
     tables/sfc_section_breakdown.csv     — ε, Δη por condición × sección
     tables/sfc_analysis.csv              — resultados agregados por condición
     tables/sfc_sensitivity.csv           — barrido de τ × condición
@@ -45,7 +45,7 @@ from vfp_analysis.shared.plot_style import (
     SECTION_LABELS,
     apply_style,
 )
-from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
+from vfp_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
     EngineBaseline,
     MissionFuelBurnResult,
     MissionSummary,
@@ -53,14 +53,14 @@ from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
     SfcSectionResult,
     SfcSensitivityPoint,
 )
-from vfp_analysis.stage6_sfc_analysis.core.services.mission_analysis_service import (
+from vfp_analysis.stage7_sfc_analysis.core.services.mission_analysis_service import (
     compute_mission_fuel_burn,
 )
-from vfp_analysis.stage6_sfc_analysis.core.services.sfc_analysis_service import (
+from vfp_analysis.stage7_sfc_analysis.core.services.sfc_analysis_service import (
     compute_sfc_analysis,
     compute_sfc_sensitivity,
 )
-from vfp_analysis.stage6_sfc_analysis.core.services.summary_generator_service import (
+from vfp_analysis.stage7_sfc_analysis.core.services.summary_generator_service import (
     generate_sfc_summary,
 )
 
@@ -146,7 +146,7 @@ def _plot_epsilon_spanwise(
     se transfiere a la eficiencia del fan.  Cuando ε_bruto > 1.10 se anota el valor
     real sobre la barra correspondiente para evidenciar la magnitud de la ganancia.
     """
-    from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import EPSILON_CAP
+    from vfp_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import EPSILON_CAP
 
     conditions = _CONDITIONS_ORDER
     x = np.arange(len(conditions))
@@ -579,15 +579,15 @@ def _write_mission_table(
 # ---------------------------------------------------------------------------
 
 def run_sfc_analysis() -> None:
-    """Ejecuta el Stage 6 completo: análisis de SFC."""
+    """Ejecuta el Stage 7 completo: análisis de SFC."""
     LOGGER.info("=" * 70)
-    LOGGER.info("STAGE 6: Specific Fuel Consumption (SFC) Impact Analysis")
+    LOGGER.info("STAGE 7: Specific Fuel Consumption (SFC) Impact Analysis")
     LOGGER.info("=" * 70)
 
-    stage6_dir  = base_config.get_stage_dir(6)
-    stage6_dir.mkdir(parents=True, exist_ok=True)
-    tables_dir  = stage6_dir / "tables"
-    figures_dir = stage6_dir / "figures"
+    stage7_dir  = base_config.get_stage_dir(7)
+    stage7_dir.mkdir(parents=True, exist_ok=True)
+    tables_dir  = stage7_dir / "tables"
+    figures_dir = stage7_dir / "figures"
     tables_dir.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -627,6 +627,13 @@ def run_sfc_analysis() -> None:
         "Motor: SFC_base=%.4f, η_fan=%.3f, BPR=%.1f",
         engine_baseline.baseline_sfc, engine_baseline.fan_efficiency, engine_baseline.bypass_ratio,
     )
+
+    mw_path = base_config.get_stage_dir(6) / "tables" / "mechanism_weight.csv"
+    if mw_path.exists():
+        df_mw = pd.read_csv(mw_path)
+        idx = df_mw.set_index("metric")["value"]
+        LOGGER.info("VPF mechanism weight penalty: +%.3f%% SFC cruise", float(idx["sfc_cruise_penalty_pct"]))
+        LOGGER.info("VPF vs conventional reverser: −%.3f%% SFC cruise", float(idx["sfc_benefit_vs_conventional_pct"]))
 
     # ── 3. Calcular mejoras de SFC ───────────────────────────────────────
     stage5_dir = base_config.get_stage_dir(5)
@@ -679,14 +686,14 @@ def run_sfc_analysis() -> None:
 
     # ── 8. Resúmenes de texto ────────────────────────────────────────────
     summary_text = generate_sfc_summary(sfc_results, section_results, mission_summary=mission_summary)
-    (stage6_dir / "sfc_analysis_summary.txt").write_text(summary_text, encoding="utf-8")
+    (stage7_dir / "sfc_analysis_summary.txt").write_text(summary_text, encoding="utf-8")
 
     from vfp_analysis.postprocessing.stage_summary_generator import (
-        generate_stage6_summary,
+        generate_stage7_summary,
         write_stage_summary,
     )
-    stage6_summary = generate_stage6_summary(stage6_dir)
-    write_stage_summary(6, stage6_summary, stage6_dir)
+    stage7_summary = generate_stage7_summary(stage7_dir)
+    write_stage_summary(7, stage7_summary, stage7_dir)
 
     # ── 8. Log resumen ───────────────────────────────────────────────────
     if sfc_results:
@@ -696,7 +703,7 @@ def run_sfc_analysis() -> None:
         LOGGER.info("Reducción máxima de SFC: %.2f%%", max_reduction)
 
     LOGGER.info("=" * 70)
-    LOGGER.info("Stage 6 completado.")
+    LOGGER.info("Stage 7 completado.")
     LOGGER.info("  Tablas:  %s", tables_dir)
     LOGGER.info("  Figuras: %s", figures_dir)
     LOGGER.info("=" * 70)

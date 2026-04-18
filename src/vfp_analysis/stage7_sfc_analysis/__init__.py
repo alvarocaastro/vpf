@@ -1,5 +1,5 @@
 """
-stage6_sfc_analysis
+stage7_sfc_analysis
 -------------------
 Estima la reducción de consumo específico de combustible (SFC) derivada de
 las mejoras aerodinámicas que permite el fan de paso variable (VPF).

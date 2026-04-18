@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from typing import List, Tuple
 
-from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
+from vfp_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
     MissionFuelBurnResult,
     MissionSummary,
     SfcAnalysisResult,

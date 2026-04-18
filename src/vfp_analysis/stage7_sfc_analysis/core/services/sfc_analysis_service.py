@@ -36,7 +36,7 @@ import pandas as pd
 import yaml
 
 from vfp_analysis.config_loader import get_flight_conditions
-from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
+from vfp_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
     EPSILON_CAP,
     ETA_FAN_ABS_CAP,
     ETA_FAN_DELTA_CAP,
@@ -45,7 +45,7 @@ from vfp_analysis.stage6_sfc_analysis.core.domain.sfc_parameters import (
     SfcSectionResult,
     SfcSensitivityPoint,
 )
-from vfp_analysis.stage6_sfc_analysis.core.services.propulsion_model_service import (
+from vfp_analysis.stage7_sfc_analysis.core.services.propulsion_model_service import (
     compute_bypass_sensitivity_factor,
     compute_combined_fan_efficiency_improvement,
     compute_fan_map_efficiency_gain,

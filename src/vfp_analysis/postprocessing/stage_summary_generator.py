@@ -435,18 +435,61 @@ def generate_stage5_summary(stage_dir: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Stage 6 — SFC Analysis (antes Stage 8)
+# Stage 6 — Reverse Thrust Modeling
 # ---------------------------------------------------------------------------
 
 def generate_stage6_summary(stage_dir: Path) -> str:
+    tables_dir  = stage_dir / "tables"
+    optimal_csv = tables_dir / "reverse_thrust_optimal.csv"
+    mw_csv      = tables_dir / "mechanism_weight.csv"
+
+    lines = _header(6, "VPF REVERSE THRUST MODELING")
+    lines += [
+        "Modelado BEM de la reversa de empuje con pala a paso negativo.",
+        "dT/dr = Z·0.5ρW²c·(CL sinφ − CD cosφ)  por sección de pala.",
+        "",
+    ]
+
+    if optimal_csv.exists():
+        try:
+            idx = pd.read_csv(optimal_csv).set_index("metric")["value"]
+            lines += [
+                f"delta_beta_opt       : {float(idx.get('delta_beta_opt_deg', float('nan'))):.1f} deg",
+                f"Empuje inverso       : {abs(float(idx.get('thrust_net_kN', float('nan')))):.1f} kN"
+                f"  ({float(idx.get('thrust_fraction_pct', float('nan'))):.1f}% del empuje fwd)",
+                f"Eficiencia fan rev.  : {float(idx.get('eta_fan_rev', float('nan'))):.3f}",
+            ]
+        except Exception:
+            pass
+
+    if mw_csv.exists():
+        try:
+            idx = pd.read_csv(mw_csv).set_index("metric")["value"]
+            lines += [
+                f"Peso mecanismo VPF   : {float(idx.get('mechanism_weight_kg', float('nan'))):.0f} kg (ambos motores)",
+                f"Ahorro vs reversor cascada: {float(idx.get('weight_saving_vs_conventional_kg', float('nan'))):.0f} kg",
+                f"Penalización SFC crucero : +{float(idx.get('sfc_cruise_penalty_pct', float('nan'))):.3f}%",
+            ]
+        except Exception:
+            pass
+
+    lines += [
+        "",
+        "Outputs: reverse_kinematics, reverse_thrust_sweep, reverse_thrust_optimal, mechanism_weight.",
+    ]
+    lines += _footer()
+    return "\n".join(lines)
+
+
+def generate_stage7_summary(stage_dir: Path) -> str:
     tables_dir = stage_dir / "tables"
     sfc_file   = tables_dir / "sfc_analysis.csv"
 
-    lines = _header(6, "SPECIFIC FUEL CONSUMPTION (SFC) IMPACT ANALYSIS")
+    lines = _header(7, "SPECIFIC FUEL CONSUMPTION (SFC) IMPACT ANALYSIS")
     lines += [
         "Estima la reducción de SFC debida al VPF con paso óptimo.",
         "η_fan,new = η_base·[1 + τ·((CL/CD)_new/(CL/CD)_base − 1)]",
-        "Factor de amortiguamiento τ = 0.65  (pérdidas 3D: huelgo, flujos secundarios).",
+        "Factor de amortiguamiento τ = 0.50  (pérdidas 3D: huelgo, flujos secundarios).",
         "",
     ]
 

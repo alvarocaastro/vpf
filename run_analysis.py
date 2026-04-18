@@ -95,7 +95,7 @@ from vfp_analysis.stage5_pitch_kinematics.application.run_pitch_kinematics impor
 from vfp_analysis.stage6_reverse_thrust.application.run_reverse_thrust import (
     run_reverse_thrust,
 )
-from vfp_analysis.stage6_sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
+from vfp_analysis.stage7_sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
 
 # ---------------------------------------------------------------------------
 # Logging
