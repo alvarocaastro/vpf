@@ -72,16 +72,29 @@ def _in_design_zone(phi: float, psi: float) -> bool:
 
 
 def compute_stage_loading(
-    alpha_opt_3d_map: Dict[Tuple[str, str], float],
+    alpha_map_deg: Dict[Tuple[str, str], float],
     axial_velocities: Dict[str, float],
     omega: float,
     radii: Dict[str, float],
 ) -> List[StageLoadingResult]:
     """Calcula la carga de etapa para cada (condition, section).
 
+    La función es agnóstica del origen del ángulo de incidencia: puede
+    alimentarse con α_opt_3D (pitch ideal libre por condición, escenario
+    aerodinámicamente óptimo) o con α_actual (comando único de actuador,
+    escenario físico real del VPF). En ambos casos los coeficientes φ, ψ
+    y W_spec se derivan de β_mech = α + arctan(Va/U).
+
+    Nota sobre la zona de diseño: los límites PHI_DESIGN y PSI_DESIGN
+    (Dixon & Hall, 2013, cap. 5) corresponden al punto de diseño de un
+    fan de paso fijo dimensionado para una PR objetivo. Un VPF operando
+    en α_opt aerodinámico genera ψ inferior (menor turning) a cambio de
+    mayor CL/CD — el check `in_design_zone` es informativo, no prescriptivo.
+
     Parámetros
     ----------
-    alpha_opt_3d_map : dict[(condition, section), alpha_opt_3D [°]]
+    alpha_map_deg : dict[(condition, section), alpha_deg]
+        Mapa de incidencia por caso (α_opt_3D o α_actual según estrategia).
     axial_velocities : dict[condition, Va [m/s]]
     omega : float — velocidad angular ω [rad/s]
     radii : dict[section, r_m]
@@ -92,18 +105,18 @@ def compute_stage_loading(
     """
     results: List[StageLoadingResult] = []
 
-    for (condition, section), alpha_3d in alpha_opt_3d_map.items():
+    for (condition, section), alpha_deg in alpha_map_deg.items():
         va = axial_velocities.get(condition, float("nan"))
         r = radii.get(section, float("nan"))
 
-        if any(math.isnan(x) for x in [va, r, alpha_3d]):
+        if any(math.isnan(x) for x in [va, r, alpha_deg]):
             continue
 
         u = omega * r
         if u <= 0:
             continue
         phi_flow = math.degrees(math.atan2(va, u))
-        beta_mech = alpha_3d + phi_flow
+        beta_mech = alpha_deg + phi_flow
         phi_coeff = va / u
 
         # V_θ = U − Va / tan(β_mech)
@@ -128,7 +141,7 @@ def compute_stage_loading(
             section=section,
             va_m_s=va,
             u_m_s=u,
-            alpha_opt_3d_deg=alpha_3d,
+            alpha_opt_3d_deg=alpha_deg,
             beta_mech_deg=beta_mech,
             phi_flow_deg=phi_flow,
             phi_coeff=phi_coeff,

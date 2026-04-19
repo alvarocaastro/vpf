@@ -5,20 +5,26 @@ Cubre desde la selección del perfil NACA hasta la estimación de reducción de 
 
 ---
 
+## Motor de referencia
+
+Todos los parámetros geométricos y de operación replican un **GE9X (Boeing 777X)**: BPR≈10, fan de 3.40 m, 16 palas composite de cuerda ancha, RPM de diseño 2200.
+
 ## Condiciones de vuelo y secciones de pala
 
-| Condición | Número de Mach | Va [m/s] | Ncrit |
-|-----------|----------------|-----------|-------|
-| Cruise    | 0.85           | 250       | 5     |
-| Takeoff   | ~0.53          | 180       | 9     |
-| Climb     | ~0.65          | 220       | 7     |
-| Descent   | ~0.59          | 200       | 7     |
+| Condición | M_rel @ mid-span | Va [m/s] | Ncrit |
+|-----------|------------------|----------|-------|
+| Takeoff   | 0.85             | 180      | 4.0   |
+| Climb     | 0.85             | 155      | 4.0   |
+| Cruise    | 0.93             | 150      | 4.0   |
+| Descent   | 0.80             | 125      | 4.0   |
 
-| Sección   | Radio [m] | U [m/s] @ 4500 rpm | c [m] | σ    |
+Va corresponde a la velocidad axial en la cara del fan (≠ velocidad de la aeronave). M_rel se evalúa en mid-span sobre la velocidad relativa W (Va + U), que es el Mach físicamente relevante para las correcciones de compresibilidad 2D.
+
+| Sección   | Radio [m] | U [m/s] @ 2200 rpm | c [m] | σ    |
 |-----------|-----------|--------------------|-------|------|
-| Root      | 0.20      | 94.25              | 0.12  | ~1.7 |
-| Mid-span  | 0.42      | 197.92             | 0.10  | ~0.8 |
-| Tip       | 0.65      | 306.31             | 0.08  | ~0.4 |
+| Root      | 0.53      | 122.1              | 0.36  | 1.73 |
+| Mid-span  | 1.00      | 230.4              | 0.46  | 1.17 |
+| Tip       | 1.70      | 391.7              | 0.46  | 0.69 |
 
 ---
 
@@ -44,14 +50,21 @@ run_analysis.py
 │
 ├── Stage 5 — Cinemática de pitch (análisis 3D de fan)
 │   ├── [A] Corrección de cascada: Weinig (K_weinig) + Carter (δ_carter)
-│   ├── [B] Corrección rotacional 3D: Snel (ΔCL ∝ (c/r)²·CL_2D)
-│   ├── [C] Twist de diseño + compromiso off-design (pérdida span-wise)
-│   ├── [D] Carga de etapa: Euler, φ, ψ, W_spec
+│   ├── [B] Corrección rotacional 3D: Snel (ΔCL ∝ (c/r)²·CL_2D), Du-Selig comparativo
+│   ├── [C] Twist de diseño + compromiso off-design con actuador único
+│   ├── [D] Carga de etapa dual: escenario ideal (α_opt_3D) vs escenario real (α_actual)
 │   └── Triángulos de velocidad: Va → φ → β_mech, Δβ por condición
 │
-└── Stage 6 — Análisis de SFC
-    └── η_fan,new = η_fan,base × (1 + τ·(ε−1))
-        SFC_new  = SFC_base / (1 + Δη/η_base)
+├── Stage 6 — Empuje inverso (reverse thrust)
+│   ├── Barrido de pitch negativo: Δβ ∈ [−25°, −5°] a N1 = 65%
+│   ├── Empuje reverso por sección y total; criterio de stall margin
+│   └── Peso del mecanismo VPF vs inversor de cascada convencional
+│
+└── Stage 7 — Análisis de SFC y misión
+    ├── ε(r, cond) = (CL/CD)_vpf / (CL/CD)_fixed_ref
+    ├── Δη_fan = τ · (ε̄ − 1) · η_fan,base
+    ├── SFC_new = SFC_base / (1 + Δη/η_base)
+    └── Integración de misión: fuel burn por fase, sensibilidad a τ
 ```
 
 ---
@@ -61,8 +74,8 @@ run_analysis.py
 ```
 vpf/
 ├── config/
-│   ├── analysis_config.yaml      # geometría del fan, condiciones, perfiles candidatos
-│   └── engine_parameters.yaml    # η_fan base, SFC baseline, τ, sfc_multipliers
+│   ├── analysis_config.yaml      # geometría del fan, condiciones, Re, Ncrit
+│   └── engine_parameters.yaml    # η_fan base, SFC baseline, τ, misión, reverse thrust
 ├── data/
 │   └── airfoils/                 # archivos .dat de perfiles NACA
 ├── results/
@@ -71,17 +84,21 @@ vpf/
 │   ├── stage3_compressibility_correction/
 │   ├── stage4_performance_metrics/
 │   ├── stage5_pitch_kinematics/
-│   │   ├── figures/              # 14 figuras
-│   │   └── tables/               # 7 tablas CSV
-│   ├── stage6_sfc_analysis/
-│   └── publication_figures/
+│   │   ├── figures/              # 20 figuras
+│   │   └── tables/               # 10 tablas CSV
+│   ├── stage6_reverse_thrust/
+│   │   ├── figures/              # 4 figuras
+│   │   └── tables/               # 4 tablas CSV
+│   └── stage7_sfc_analysis/
+│       ├── figures/              # 7 figuras
+│       └── tables/               # 4 tablas CSV
 ├── src/vfp_analysis/
 │   ├── settings.py               # PhysicsConstants, XfoilSettings, PipelineSettings
 │   ├── config_loader.py          # lectura de YAML → estructuras tipadas
 │   ├── validation/
 │   │   └── validators.py         # file/dir/polar/physical range checks
 │   ├── pipeline/
-│   │   └── contracts.py          # Stage1Result … Stage6Result con validate()
+│   │   └── contracts.py          # StageNResult con validate()
 │   ├── adapters/xfoil/           # XfoilRunnerAdapter, parser, port
 │   ├── postprocessing/
 │   │   ├── aerodynamics_utils.py
@@ -98,13 +115,25 @@ vpf/
 │   │   │   └── run_pitch_kinematics.py
 │   │   └── core/services/
 │   │       ├── cascade_correction_service.py
-│   │       ├── rotational_correction_service.py
-│   │       ├── blade_twist_service.py
-│   │       ├── stage_loading_service.py
+│   │       ├── rotational_correction_service.py   # Snel + Du-Selig
+│   │       ├── blade_twist_service.py              # twist + off-design α
+│   │       ├── stage_loading_service.py            # φ, ψ, W_spec (agnóstico de α)
 │   │       ├── optimal_incidence_service.py
 │   │       ├── pitch_adjustment_service.py
 │   │       └── kinematics_service.py
-│   └── stage6_sfc_analysis/
+│   ├── stage6_reverse_thrust/
+│   │   ├── application/run_reverse_thrust.py
+│   │   └── core/services/
+│   │       ├── reverse_kinematics_service.py
+│   │       ├── reverse_thrust_service.py
+│   │       └── mechanism_weight_service.py
+│   └── stage7_sfc_analysis/
+│       ├── application/run_sfc_analysis.py
+│       └── core/services/
+│           ├── propulsion_model_service.py
+│           ├── sfc_analysis_service.py
+│           ├── mission_analysis_service.py
+│           └── summary_generator_service.py
 ├── tests/
 └── run_analysis.py
 ```
@@ -143,46 +172,87 @@ export XFOIL_EXE="/opt/xfoil/xfoil"
 
 ### `config/analysis_config.yaml`
 
-Parámetros geométricos y de simulación. Fuente de verdad única para el fan.
+Geometría del fan (clase GE9X), condiciones de vuelo, Re por (fase, sección), Ncrit y ajustes de XFOIL.
 
 ```yaml
-fan:
-  rpm: 4500
-  r_root: 0.20      # [m]
-  r_mid:  0.42
-  r_tip:  0.65
+fan_geometry:
+  rpm: 2200
+  radius:      { root: 0.53, mid_span: 1.00, tip: 1.70 }   # [m]
+  axial_velocity:
+    takeoff: 180.0
+    climb:   155.0
+    cruise:  150.0
+    descent: 125.0
 
 blade_geometry:
-  Z_blades:       18
-  c_root:         0.12   # chord [m]
-  c_mid:          0.10
-  c_tip:          0.08
-  theta_camber_deg: 8.0  # NACA 65-410
+  num_blades: 16
+  chord:      { root: 0.36, mid_span: 0.46, tip: 0.46 }   # [m]
+  theta_camber_deg: 8.0       # NACA 65-410
 
-flight_conditions:
-  cruise:  { mach: 0.85, Va: 250, ncrit: 5 }
-  takeoff: { Va: 180,    ncrit: 9 }
-  climb:   { Va: 220,    ncrit: 7 }
-  descent: { Va: 200,    ncrit: 7 }
+target_mach:                   # M_rel en mid-span (W/a)
+  takeoff: 0.85
+  climb:   0.85
+  cruise:  0.93
+  descent: 0.80
+
+ncrit:                         # Tu ~0.5–1% en fan → Ncrit ≈ 4
+  takeoff: 4.0
+  climb:   4.0
+  cruise:  4.0
+  descent: 4.0
+
+reynolds:                      # derivados de ρ·W·c/μ por condición ISA
+  cruise:   { root: 1.8e6, mid_span: 3.2e6, tip: 5.0e6 }
+  takeoff:  { root: 5.3e6, mid_span: 9.1e6, tip: 13.5e6 }
+  climb:    { root: 3.4e6, mid_span: 6.0e6, tip: 9.1e6 }
+  descent:  { root: 3.4e6, mid_span: 6.5e6, tip: 10.2e6 }
+
+alpha:  { min: -5.0, max: 23.0, step: 0.15 }
+
+airfoil_geometry:
+  thickness_ratio: 0.10
+  korn_kappa:      0.87        # NACA 6-series
 
 xfoil:
-  alpha_start: -2.0
-  alpha_end:   16.0
-  alpha_step:   0.5
+  iter: 200
+  timeout_final_s: 180.0
+  max_retries: 3
 ```
 
 ### `config/engine_parameters.yaml`
 
 ```yaml
-fan_efficiency: 0.88          # η_fan base
-baseline_sfc:   0.0185        # [kg/(N·h)]
-profile_efficiency_transfer: 0.35   # τ — transferencia 2D→fan completo
+baseline_sfc:   0.50            # lb/(lbf·h) — GE9X
+fan_efficiency: 0.90
+bypass_ratio:  10.0
+profile_efficiency_transfer: 0.50   # τ — fracción de ganancia 2D que llega al fan
 
 sfc_multipliers:
+  takeoff: 1.15
+  climb:   1.05
   cruise:  1.00
-  takeoff: 0.95
-  climb:   0.97
-  descent: 1.02
+  descent: 1.10
+
+mission:
+  phases:
+    takeoff: { duration_min:   0.5, thrust_fraction: 1.00 }
+    climb:   { duration_min:  20.0, thrust_fraction: 0.75 }
+    cruise:  { duration_min: 480.0, thrust_fraction: 0.25 }
+    descent: { duration_min:  25.0, thrust_fraction: 0.05 }
+  design_thrust_kN: 105.0
+  fuel_price_usd_per_kg: 0.90
+
+reverse_thrust:
+  n1_fraction: 0.65
+  va_landing_m_s: 60.0
+  delta_beta_min_deg: -25.0
+  delta_beta_max_deg:  -5.0
+  delta_beta_steps:    41
+  target_thrust_fraction: 0.40
+  engine_dry_weight_kg: 7930.0
+  mechanism_weight_fraction:       0.04    # VPF actuator
+  conventional_reverser_fraction:  0.10    # cascada convencional
+  aircraft_L_D: 18.0
 ```
 
 ### `src/vfp_analysis/settings.py` — constantes físicas centralizadas
@@ -211,10 +281,12 @@ python run_analysis.py
 
 Al finalizar se imprime un resumen con las métricas clave de cada stage y los archivos generados.
 
-### Pipeline individual (Stage 5)
+### Pipelines individuales
 
 ```bash
 python -m vfp_analysis.stage5_pitch_kinematics.application.run_pitch_kinematics
+python -m vfp_analysis.stage6_reverse_thrust.application.run_reverse_thrust
+python -m vfp_analysis.stage7_sfc_analysis.application.run_sfc_analysis
 ```
 
 ### Tests
@@ -334,7 +406,7 @@ twist_total = β_metal(root) − β_metal(tip)       [°]
 loss_pct(r, cond)       = 1 − (CL/CD)[α_actual] / (CL/CD)_max_3D
 ```
 
-#### D — Carga de etapa (Euler, φ, ψ)
+#### D — Carga de etapa (Euler, φ, ψ) — escenario ideal vs real
 
 ```
 φ(r)    = Va / U(r)                   — coeficiente de caudal
@@ -343,7 +415,14 @@ V_θ(r)  = U − Va / tan(β_mech_3D)    — velocidad tangencial impartida
 W_spec  = U · V_θ   [J/kg]           — trabajo específico (ec. de Euler)
 ```
 
-Zona de diseño fan alto bypass: φ ∈ [0.35, 0.55], ψ ∈ [0.25, 0.50]  [Dixon & Hall, cap. 5].
+El análisis publica **dos tablas** para hacer explícito el trade-off del VPF:
+
+- `stage_loading.csv` — escenario **ideal** (pitch libre por condición, α = α_opt_3D).
+- `stage_loading_single_actuator.csv` — escenario **real** (un β_metal + un Δβ_hub por fase, α = α_actual).
+
+Crucero y mid-span coinciden en ambos (hub_section optimizado, Δβ_hub=0 en la referencia). En root/tip fuera de crucero, el actuador único fuerza α por encima de α_opt → ψ mayor a costa de L/D.
+
+**Nota sobre la zona de diseño Dixon & Hall** (φ ∈ [0.35, 0.55], ψ ∈ [0.25, 0.50]): está dimensionada para un fan de **paso fijo** que entrega PR≈1.7 (ψ_tip≈0.37) exigiendo α ≈ 6–10° con L/D≈7. El VPF opera en α_opt ≈ 1–3° con L/D ≈ 11–19: sacrifica ψ (menor turning por etapa) a cambio de eficiencia aerodinámica superior por sección. Los puntos VPF cayendo fuera de la zona no son un fallo — son la manifestación del valor del paso variable. El flag `in_design_zone` es informativo, no prescriptivo. La lectura física se detalla en el bloque [E] de `pitch_kinematics_summary.txt`.
 
 **Salidas Stage 5:**
 
@@ -351,29 +430,69 @@ Zona de diseño fan alto bypass: φ ∈ [0.35, 0.55], ψ ∈ [0.25, 0.50]  [Dixo
 |-----------|-----------|
 | `cascade_corrections.csv` | σ, s, K_weinig, δ_carter, CL_2D vs CL_cascade |
 | `rotational_corrections.csv` | c/r, ΔCL_snel, α_opt_2D vs α_opt_3D, CL/CD_2D vs CL/CD_3D |
+| `rotational_corrections_du_selig.csv` | Modelo Du-Selig comparativo con Snel |
 | `optimal_incidence.csv` | α_opt_3D por condición y sección |
 | `pitch_adjustment.csv` | Δα_3D, Δβ_mech_3D |
 | `blade_twist_design.csv` | β_metal(r), φ_flow(r), twist_from_tip |
 | `off_design_incidence.csv` | α_actual, Δα_compromise, efficiency_loss_pct |
-| `stage_loading.csv` | φ, ψ, W_spec, in_design_zone |
+| `kinematics_analysis.csv` | Triángulos de velocidad Va/U/W/β por caso |
+| `stage_loading.csv` | φ, ψ, W_spec, in_design_zone — **escenario ideal** |
+| `stage_loading_single_actuator.csv` | Mismo layout — **escenario real (actuador único)** |
 
 ---
 
-### Stage 6 — Análisis de SFC
+### Stage 6 — Empuje inverso (reverse thrust)
 
-Modelo de transferencia de eficiencia de perfil a fan completo:
+El VPF alcanza empuje inverso rotando el pitch de la pala a ángulos negativos **manteniendo la dirección de giro del fan**: no se necesitan puertas bloqueadoras ni cascadas de tobera como en un inversor convencional.
+
+**Condiciones de operación durante el ground roll:**
+
+- `N1_fraction = 0.65` (fan al 65% de su RPM de diseño)
+- `Va_landing = 60 m/s` (promediado a lo largo del recorrido; reversers engaged ≈ 75 m/s)
+- ρ = 1.225 kg/m³ (sea level)
+
+**Barrido de pitch y criterio de optimización:**
 
 ```
-ε             = CL_CD_vpf / CL_CD_cruise        — ratio de mejora
-Δη_profile    = (ε − 1) · τ                     — ganancia de perfil amortiguada
-η_fan,new     = η_fan,base · (1 + Δη_profile)   — nueva eficiencia de fan
+Δβ ∈ [−25°, −5°], 41 puntos
+Thrust_rev(r, Δβ) = ρ · Va · Ω · r · c · Z · (CL sin β − CD cos β)
+Target: |Thrust_rev| ≥ 0.40 · Thrust_takeoff_forward, stall_margin ≥ 0
+```
+
+Los polares 3D de Stage 5 se re-evalúan a α negativo mediante extrapolación simétrica (el NACA 65-410 es no simétrico, pero la curva CL(α) mantiene pendiente lineal hasta el stall inverso). El servicio busca el Δβ óptimo que maximiza reverso manteniendo margen de stall positivo en las tres secciones.
+
+**Comparación de peso del mecanismo:**
+
+```
+W_VPF,actuator  = 0.04 · W_dry_engine              — anillo + links + raíz reforzada
+W_cascade_conv  = 0.10 · W_dry_engine              — cascadas + puertas + refuerzo de góndola
+Δ fuel burn por ahorro de peso ≈ Δw / (L/D) · mission_range
+```
+
+**Salidas:** `stage6_reverse_thrust/` — 4 tablas (`reverse_thrust_sweep`, `reverse_thrust_optimal`, `reverse_kinematics`, `mechanism_weight`) y 4 figuras (`thrust_vs_pitch_sweep`, `efficiency_and_stall_margin`, `spanwise_thrust_at_optimum`, `mechanism_weight_comparison`).
+
+---
+
+### Stage 7 — Análisis de SFC y misión
+
+Modelo de transferencia de eficiencia de perfil 2D a fan completo:
+
+```
+ε(r, cond)    = (CL/CD)_vpf(r, cond) / (CL/CD)_fixed_ref(r, cond)   — ratio de mejora
+ε̄(cond)       = media radial ponderada de ε
+Δη_fan(cond)  = τ · (ε̄ − 1) · η_fan,base             — ganancia amortiguada 2D→3D
+η_fan,new     = η_fan,base + Δη_fan
 SFC_new       = SFC_base / (1 + Δη_fan / η_fan,base)
 ΔSFC [%]      = (SFC_base − SFC_new) / SFC_base · 100
 ```
 
-`τ` (profile_efficiency_transfer) es el factor de atenuación 2D→3D, configurado en `engine_parameters.yaml`.
+`τ` (profile_efficiency_transfer ≈ 0.5) amortigua la ganancia 2D ideal para reflejar pérdidas 3D (tip clearance, secondary flows, shocks) no capturadas en el análisis de sección aislada.
 
-**Salida:** `stage6_sfc_analysis/tables/sfc_results.csv`
+**Referencia fixed-pitch:** se asume pitch óptimo para crucero (ε_cruise ≡ 1). En takeoff/climb/descent, ε refleja la ganancia genuina del VPF que reconfigura α a cada fase.
+
+**Integración de misión:** se agregan fuel burn y coste por fase usando `thrust_fraction` y `duration_min` de `mission.phases`, y se calcula la sensibilidad a τ ∈ [0.3, 0.7].
+
+**Salidas:** `stage7_sfc_analysis/` — 4 tablas (`sfc_analysis`, `sfc_section_breakdown`, `sfc_sensitivity`, `mission_fuel_burn`) y 7 figuras (`sfc_combined`, `fan_efficiency_improvement`, `fixed_vs_vpf_efficiency`, `epsilon_spanwise`, `sfc_sensitivity_tau`, `efficiency_mechanism_breakdown`, `mission_fuel_burn`). Stage 7 **no consume ψ** de Stage 5 — usa ε (ratios L/D) y φ, por lo que los valores bajos de ψ del VPF no propagan al SFC.
 
 ---
 
@@ -397,11 +516,12 @@ Ningún stage importa directamente de otro stage. La comunicación es exclusivam
 | Stage | Tablas | Figuras | Texto |
 |-------|--------|---------|-------|
 | 1 | ranking.csv, best_airfoil.csv | polar_best.png | selection_summary.txt |
-| 2 | polar.csv × 12 | efficiency_plot.png × 12, cl_alpha_stall.png × 12, polar_plot.png × 12 | — |
-| 3 | corrected_polar.csv × 12 | comparison_2d_3d.png × 12 | — |
-| 4 | metrics_summary.csv | metrics_heatmap.png, efficiency_gain.png | — |
-| 5 | 7 CSV (ver tabla Stage 5) | 14 figuras | stage5_summary.txt |
-| 6 | sfc_results.csv | sfc_reduction.png | sfc_summary.txt |
+| 2 | polar.csv × 12 | efficiency, cl_alpha_stall, polar × 12 | — |
+| 3 | corrected_polar.csv × 12 | comparison_2d_3d × 12 | — |
+| 4 | metrics_summary.csv | metrics_heatmap, efficiency_gain | — |
+| 5 | 10 CSV (ver tabla Stage 5) | 20 figuras | pitch_kinematics_summary.txt, finalresults_stage5.txt |
+| 6 | 4 CSV (reverse_thrust_*) | 4 figuras | reverse_thrust_summary.txt |
+| 7 | 4 CSV (sfc_*, mission_*) | 7 figuras | sfc_analysis_summary.txt, finalresults_stage7.txt |
 
 ---
 
@@ -423,5 +543,6 @@ Ningún stage importa directamente de otro stage. La comunicación es exclusivam
 - Saravanamuttoo et al. (2017): *Gas Turbine Theory*, 6ª ed.
 - Carter (1950): *The Low Speed Performance of Related Aerofoils in Cascade*, NACA TN-2273
 - Snel, Houwink & Bosschers (1994): *Sectional Prediction of Lift Coefficients on Rotating Wind Turbine Blades*
+- Du & Selig (1998): *A 3-D Stall-Delay Model for Horizontal Axis Wind Turbine Performance Prediction*, AIAA 98-0021
 - Drela (1989): XFOIL — MIT, http://web.mit.edu/drela/Public/web/xfoil/
 - ESDU 05017: *Profile Losses and Deviation in Axial Compressor and Fan Blade Rows*

@@ -23,7 +23,8 @@ Outputs (en results/stage5_pitch_kinematics/):
         pitch_adjustment.csv
         blade_twist_design.csv
         off_design_incidence.csv
-        stage_loading.csv
+        stage_loading.csv                  # ideal: pitch libre por condición (α_opt_3D)
+        stage_loading_single_actuator.csv  # real:  un β_metal + un Δβ_hub por fase
         kinematics_analysis.csv
     figures/  (≥16 PNG: 16 fijas + 1 por condición de vuelo)
     pitch_kinematics_summary.txt
@@ -464,25 +465,39 @@ def _fig_pitch_compromise_loss(
 # ---------------------------------------------------------------------------
 
 def _fig_phi_psi_map(
-    loading: List[StageLoadingResult],
+    loading_ideal: List[StageLoadingResult],
     figures_dir: Path,
+    loading_actual: List[StageLoadingResult] | None = None,
 ) -> None:
-    """Diagrama φ-ψ con puntos de operación y zona de diseño."""
-    fig, ax = plt.subplots(figsize=(7.0, 6.0))
+    """Diagrama φ-ψ con puntos de operación y zona de diseño.
 
-    # Zona de diseño
+    Si se pasa `loading_actual`, se pintan ambos escenarios:
+      - `loading_ideal`  (pitch ideal por condición): marcador lleno
+      - `loading_actual` (actuador único, β_metal fijo): marcador hueco
+    Una flecha corta une los pares para visualizar el desplazamiento.
+    """
+    fig, ax = plt.subplots(figsize=(7.5, 6.0))
+
+    # Zona de diseño de fan de paso fijo (Dixon & Hall, 2013)
     ax.axvspan(0.35, 0.55, alpha=0.10, color="#4CAF50")
     ax.axhspan(0.25, 0.50, alpha=0.10, color="#4CAF50")
     ax.fill_betweenx([0.25, 0.50], 0.35, 0.55, alpha=0.18, color="#4CAF50",
-                     label="Zona de diseño (Dixon & Hall, 2013)")
+                     label="Zona fan paso fijo (Dixon & Hall, 2013)")
 
-    # Puntos de operación
-    cmap = _cond_colors()
-    for res in loading:
+    marker_map = {"takeoff": "o", "climb": "s", "cruise": "^", "descent": "D"}
+
+    # Índice por (condition, section) para emparejar ideal ↔ actual
+    actual_by_key = {
+        (r.condition, r.section): r for r in (loading_actual or [])
+    }
+
+    for res in loading_ideal:
         if math.isnan(res.phi_coeff) or math.isnan(res.psi_loading):
             continue
         color = SECTION_COLORS.get(res.section, "gray")
-        marker = {"takeoff": "o", "climb": "s", "cruise": "^", "descent": "D"}.get(res.condition, "o")
+        marker = marker_map.get(res.condition, "o")
+
+        # Punto ideal (lleno)
         ax.scatter(res.phi_coeff, res.psi_loading,
                    s=120, color=color, marker=marker,
                    edgecolors="white", linewidths=0.8, zorder=5)
@@ -491,6 +506,24 @@ def _fig_phi_psi_map(
             (res.phi_coeff, res.psi_loading),
             xytext=(5, 4), textcoords="offset points", fontsize=7,
         )
+
+        # Punto actual (hueco) y flecha ideal → actual
+        act = actual_by_key.get((res.condition, res.section))
+        if act and not (math.isnan(act.phi_coeff) or math.isnan(act.psi_loading)):
+            same_point = (
+                abs(act.phi_coeff - res.phi_coeff) < 1e-6
+                and abs(act.psi_loading - res.psi_loading) < 1e-6
+            )
+            ax.scatter(act.phi_coeff, act.psi_loading,
+                       s=120, facecolors="none", edgecolors=color, marker=marker,
+                       linewidths=1.6, zorder=5)
+            if not same_point:
+                ax.annotate(
+                    "", xy=(act.phi_coeff, act.psi_loading),
+                    xytext=(res.phi_coeff, res.psi_loading),
+                    arrowprops=dict(arrowstyle="->", color=color, lw=0.8,
+                                    alpha=0.6, shrinkA=4, shrinkB=4),
+                )
 
     # Leyendas manuales
     from matplotlib.lines import Line2D
@@ -503,11 +536,20 @@ def _fig_phi_psi_map(
                markersize=9, label=SECTION_LABELS["tip"]),
         Line2D([0], [0], color="#4CAF50", lw=8, alpha=0.35, label="Zona de diseño"),
     ]
-    ax.legend(handles=handles, loc="upper right", fontsize=8)
+    if loading_actual:
+        handles += [
+            Line2D([0], [0], marker="o", color="w", markerfacecolor="gray",
+                   markersize=9, label="Ideal (pitch libre por condición)"),
+            Line2D([0], [0], marker="o", color="gray", markerfacecolor="none",
+                   markersize=9, markeredgewidth=1.6, label="Real (actuador único)"),
+        ]
+    ax.legend(handles=handles, loc="center left", bbox_to_anchor=(1.02, 0.5),
+              fontsize=8, frameon=True)
     ax.set_xlabel(r"Flow coefficient $\phi = V_a/U$ [—]")
     ax.set_ylabel(r"Work coefficient $\psi = \Delta V_\theta/U$ [—]")
-    ax.set_title("Mapa de carga de etapa — Puntos de operación VPF\n"
-                 r"(zona de diseño: Dixon & Hall, 2013)", pad=8)
+    subtitle = ("(zona de diseño: fan de paso fijo a PR objetivo — "
+                "un VPF en α_opt opera bajo ψ para ganar $C_L/C_D$)")
+    ax.set_title("Mapa de carga de etapa — Puntos de operación VPF\n" + subtitle, pad=8)
     fig.tight_layout()
     fig.savefig(figures_dir / "phi_psi_operating_map.png")
     plt.close(fig)
@@ -1120,8 +1162,22 @@ def run_pitch_kinematics() -> None:
     # ── 9. [D] Carga de etapa ────────────────────────────────────────────────
     LOGGER.info("[D] Calculando carga de etapa (Euler: φ, ψ, W_spec)...")
     loading_results = compute_stage_loading(alpha_opt_3d_map, axial_vels, omega, radii)
-    in_zone = sum(1 for r in loading_results if r.in_design_zone)
-    LOGGER.info("Carga de etapa: %d casos, %d en zona de diseño", len(loading_results), in_zone)
+    in_zone_ideal = sum(1 for r in loading_results if r.in_design_zone)
+    LOGGER.info("Carga de etapa [ideal — pitch libre]: %d casos, %d en zona de diseño",
+                len(loading_results), in_zone_ideal)
+
+    # ── 9b. [D'] Carga de etapa bajo actuador único (α_actual de off_design) ──
+    alpha_actual_map = {
+        (r.condition, r.section): r.alpha_actual_deg
+        for r in off_design_results
+        if not math.isnan(r.alpha_actual_deg)
+    }
+    loading_actual_results = compute_stage_loading(
+        alpha_actual_map, axial_vels, omega, radii,
+    )
+    in_zone_actual = sum(1 for r in loading_actual_results if r.in_design_zone)
+    LOGGER.info("Carga de etapa [real — actuador único]: %d casos, %d en zona de diseño",
+                len(loading_actual_results), in_zone_actual)
 
     # ── 10. Figuras ──────────────────────────────────────────────────────────
     LOGGER.info("Generando figuras...")
@@ -1142,7 +1198,7 @@ def run_pitch_kinematics() -> None:
     _fig_pitch_compromise_loss(off_design_results, figures_dir)
 
     # Carga de etapa
-    _fig_phi_psi_map(loading_results, figures_dir)
+    _fig_phi_psi_map(loading_results, figures_dir, loading_actual=loading_actual_results)
     _fig_work_distribution(loading_results, figures_dir)
     _fig_loading_profile_spanwise(loading_results, figures_dir)
 
@@ -1177,6 +1233,9 @@ def run_pitch_kinematics() -> None:
     _write_twist_table(twist_results,     tables_dir / "blade_twist_design.csv")
     _write_off_design_table(off_design_results, tables_dir / "off_design_incidence.csv")
     _write_stage_loading_table(loading_results, tables_dir / "stage_loading.csv")
+    _write_stage_loading_table(
+        loading_actual_results, tables_dir / "stage_loading_single_actuator.csv",
+    )
 
     writer = FilesystemPitchKinematicsWriter()
     writer.write_optimal_incidence_table(
@@ -1203,6 +1262,13 @@ def run_pitch_kinematics() -> None:
                      if r.condition != "cruise" and not math.isnan(r.efficiency_loss_pct)))
     )
     _cr_by_sec = {r.section: r for r in cascade_results}
+
+    # Rango de ψ en ambos escenarios para el bloque [E]
+    psi_ideal = [r.psi_loading for r in loading_results if not math.isnan(r.psi_loading)]
+    psi_actual = [r.psi_loading for r in loading_actual_results if not math.isnan(r.psi_loading)]
+    psi_ideal_rng = (min(psi_ideal), max(psi_ideal)) if psi_ideal else (float("nan"), float("nan"))
+    psi_actual_rng = (min(psi_actual), max(psi_actual)) if psi_actual else (float("nan"), float("nan"))
+
     summary_lines = [
         "Stage 5: Rigorous aerodynamic analysis of the Variable Pitch Fan.",
         "",
@@ -1220,8 +1286,22 @@ def run_pitch_kinematics() -> None:
         f"    Total twist: {twist_total:.1f}°  (root − tip)",
         f"    Average pitch compromise loss (off-design): {avg_loss:.2f}%",
         "",
-        f"[D] Stage loading (Euler equation):",
-        f"    Points in design zone: {in_zone}/{len(loading_results)}",
+        f"[D] Stage loading — ideal (pitch libre por condición, α = α_opt_3D):",
+        f"    ψ range: {psi_ideal_rng[0]:.3f} – {psi_ideal_rng[1]:.3f}",
+        f"    Points in design zone: {in_zone_ideal}/{len(loading_results)}",
+        "",
+        f"[E] Stage loading — real (actuador único, α = α_actual de off_design):",
+        f"    ψ range: {psi_actual_rng[0]:.3f} – {psi_actual_rng[1]:.3f}",
+        f"    Points in design zone: {in_zone_actual}/{len(loading_actual_results)}",
+        "",
+        "    Lectura física del trade-off VPF:",
+        "    La zona de diseño φ-ψ (Dixon & Hall, 2013) corresponde a un fan de",
+        "    paso fijo dimensionado para PR objetivo (ψ_tip ≈ 0.37 para PR≈1.7),",
+        "    que requiere α ≈ 6–10° pagando L/D ≈ 7. El VPF aquí analizado opera",
+        "    en α_opt ≈ 1–3° con L/D ≈ 11–19, sacrificando ψ (menor turning por",
+        "    etapa) a cambio de eficiencia aerodinámica superior por sección.",
+        "    Los puntos fuera de la zona reflejan esta decisión de diseño, no un",
+        "    error — el check `in_design_zone` es informativo, no prescriptivo.",
         "",
         f"Tables:  {tables_dir}",
         f"Figures: {figures_dir}",

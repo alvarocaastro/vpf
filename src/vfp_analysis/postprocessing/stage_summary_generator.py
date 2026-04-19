@@ -401,13 +401,13 @@ def generate_stage5_summary(stage_dir: Path) -> str:
         except Exception:
             pass
 
-    # --- Stage loading ---
+    # --- Stage loading (ideal: pitch libre por condición) ---
     loading_file = tables_dir / "stage_loading.csv"
     if loading_file.exists():
         try:
             df = pd.read_csv(loading_file)
             if not df.empty:
-                lines += ["── Carga de etapa (Euler — Dixon & Hall) ──────────────────"]
+                lines += ["── Carga de etapa — ideal (α = α_opt_3D) ──────────────────"]
                 phi = df["phi_coeff"].dropna()
                 psi = df["psi_loading"].dropna()
                 w   = df["W_specific_kJ_kg"].dropna()
@@ -423,12 +423,35 @@ def generate_stage5_summary(stage_dir: Path) -> str:
         except Exception:
             pass
 
+    # --- Stage loading (real: actuador único) ---
+    loading_actual_file = tables_dir / "stage_loading_single_actuator.csv"
+    if loading_actual_file.exists():
+        try:
+            df = pd.read_csv(loading_actual_file)
+            if not df.empty:
+                lines += ["── Carga de etapa — real (actuador único, α = α_actual) ──"]
+                psi = df["psi_loading"].dropna()
+                w   = df["W_specific_kJ_kg"].dropna()
+                in_zone = df["in_design_zone"].sum() if "in_design_zone" in df.columns else "?"
+                total   = len(df)
+                lines += [
+                    f"  ψ (trabajo) : {psi.min():.3f} – {psi.max():.3f}  (media {psi.mean():.3f})",
+                    f"  W_spec      : {w.min():.2f} – {w.max():.2f} kJ/kg",
+                    f"  Puntos en zona de diseño: {in_zone}/{total}",
+                    "  Nota: zona Dixon & Hall es para fan de paso fijo a PR objetivo;",
+                    "        el VPF opera bajo ψ para ganar CL/CD (trade-off de diseño).",
+                ]
+                lines += [""]
+        except Exception:
+            pass
+
     n_figs = len(list(figures_dir.glob("*.png"))) if figures_dir.exists() else 0
     lines += [
         f"Figuras generadas : {n_figs}",
         "Tablas exportadas : cascade_corrections, rotational_corrections,",
         "                    optimal_incidence, pitch_adjustment, blade_twist_design,",
-        "                    off_design_incidence, stage_loading, kinematics_analysis",
+        "                    off_design_incidence, stage_loading,",
+        "                    stage_loading_single_actuator, kinematics_analysis",
     ]
     lines += _footer()
     return "\n".join(lines)
