@@ -29,10 +29,10 @@ COLORS = {
 }
 
 FLIGHT_LABELS = {
-    "takeoff": "Despegue",
-    "climb":   "Ascenso",
-    "cruise":  "Crucero",
-    "descent": "Descenso",
+    "takeoff": "Takeoff",
+    "climb":   "Climb",
+    "cruise":  "Cruise",
+    "descent": "Descent",
 }
 
 SECTION_LABELS = {

@@ -68,6 +68,13 @@ def wave_drag_increment(mach: float, mdd: float) -> float:
 
         ΔCDw = 20 × (M - Mdd)^4    if M > Mdd, else 0
 
+    The coefficient 20 is calibrated near onset (M − Mdd < 0.05).
+    For larger exceedances the law significantly over-predicts drag
+    (sweeping effects, limit-cycle shocks).  A hard cap of 0.025
+    (250 drag counts) prevents unphysical values at M >> Mdd, which is
+    characteristic of a fan tip in transonic cruise where the 2-D
+    subsonic models are already at their validity boundary.
+
     Parameters
     ----------
     mach : float
@@ -82,4 +89,4 @@ def wave_drag_increment(mach: float, mdd: float) -> float:
     """
     if mach <= mdd:
         return 0.0
-    return 20.0 * (mach - mdd) ** 4
+    return min(20.0 * (mach - mdd) ** 4, 0.025)

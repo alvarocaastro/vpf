@@ -222,6 +222,21 @@ def _write_summary(
         f"  Axial landing speed:           {opt.va_landing_m_s:.0f} m/s",
         f"  Min stall margin:              {opt.stall_margin_min:+.2f}",
         f"  Aerodynamically valid:         {opt.aerodynamically_valid}",
+        *(
+            [
+                "",
+                "  AVISO — PUNTO INFEASIBLE: ningún Δβ del barrido cumple stall_margin ≥ 0",
+                "  simultáneamente con empuje inverso neto. El punto reportado es el más",
+                "  próximo al objetivo (40%) dentro de los puntos con T_rev < 0.",
+                "  Causa probable: los polares XFOIL de Stage 3 no cubren α muy negativos",
+                "  (rango actual α_min = -5°). Para el análisis de inversión se necesitaría",
+                "  extender el polar a α ∈ [-25°, +5°] o usar datos de ensayo en túnel.",
+                "  El análisis de peso del mecanismo y el impacto en SFC son independientes",
+                "  de este resultado y siguen siendo válidos.",
+            ]
+            if not opt.aerodynamically_valid
+            else []
+        ),
         "",
         "MECHANISM WEIGHT",
         f"  VPF mechanism (both engines):  {mw.mechanism_weight_kg:.0f} kg",

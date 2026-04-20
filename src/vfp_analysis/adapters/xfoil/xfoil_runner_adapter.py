@@ -1,12 +1,4 @@
-"""
-xfoil_runner_adapter.py
-------------------------
-Adaptador entre el dominio (SimulationCondition) y el servicio de XFOIL.
-
-Convierte un SimulationCondition en XfoilPolarRequest y delega a
-run_xfoil_polar. Los timeouts y número de reintentos se leen de
-PipelineSettings para no tener valores dispersos por el código.
-"""
+"""xfoil_runner_adapter.py — adapts SimulationCondition to XfoilPolarRequest."""
 
 from __future__ import annotations
 
@@ -21,18 +13,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class XfoilRunnerAdapter:
-    """Adaptador XFOIL con timeouts y reintentos leídos de PipelineSettings.
+    """XFOIL adapter with timeouts and retries from PipelineSettings.
 
-    Parameters
-    ----------
-    timeout_override : float, optional
-        Timeout por intento [s]. Si se omite se usa el valor del stage:
-        - Stage 1 (selección) → ``XfoilSettings.TIMEOUT_SELECTION_S``
-        - Stage 2 (análisis final) → ``XfoilSettings.TIMEOUT_FINAL_S``
-    max_retries_override : int, optional
-        Anula el valor de ``XfoilSettings.MAX_RETRIES``.
-    final_analysis : bool
-        True → usa TIMEOUT_FINAL_S (Stage 2); False → TIMEOUT_SELECTION_S.
+    ``final_analysis=True`` uses TIMEOUT_FINAL_S (Stage 2);
+    ``False`` uses TIMEOUT_SELECTION_S (Stage 1).
     """
 
     def __init__(
@@ -61,22 +45,7 @@ class XfoilRunnerAdapter:
         condition: SimulationCondition,
         output_file: Path,
     ) -> XfoilPolarResult:
-        """Calcula el polar para la condición dada.
-
-        Parameters
-        ----------
-        airfoil_dat : Path
-            Fichero .dat del perfil aerodinámico.
-        condition : SimulationCondition
-            Re, Mach, Ncrit, rango de alpha.
-        output_file : Path
-            Destino del fichero polar XFOIL (.dat texto).
-
-        Returns
-        -------
-        XfoilPolarResult
-            Incluye tasa de convergencia y lista de alpha fallidos.
-        """
+        """Compute the polar for the given condition."""
         request = XfoilPolarRequest(
             airfoil_dat=airfoil_dat,
             re=condition.reynolds,
@@ -94,7 +63,7 @@ class XfoilRunnerAdapter:
         )
         if result.convergence_failures > 0:
             LOGGER.warning(
-                "Polar %s/%s: %d puntos no convergidos (tasa=%.0f%%)",
+                "Polar %s/%s: %d non-converged points (rate=%.0f%%)",
                 getattr(condition, "name", "?"),
                 output_file.stem,
                 result.convergence_failures,

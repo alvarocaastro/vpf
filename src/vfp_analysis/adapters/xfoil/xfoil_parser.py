@@ -1,20 +1,4 @@
-"""
-xfoil_parser.py
----------------
-Parser robusto del fichero de polar XFOIL (texto plano con columnas separadas
-por espacios).
-
-Formato de salida XFOIL::
-
-     alpha      CL      CD     CDp      CM   Top_Xtr  Bot_Xtr
-    -------   ------  ------  ------  ------  -------  -------
-     -5.000  -0.4991  0.0078  0.0020 -0.0524   0.5263   0.0000
-     ...
-
-El parser omite silenciosamente las cabeceras y líneas malformadas.
-Después de parsear puede ejecutar comprobaciones de calidad mediante
-``validate_polar_quality`` del módulo de validaciones.
-"""
+"""xfoil_parser.py — robust parser for XFOIL space-delimited polar files."""
 
 from __future__ import annotations
 
@@ -37,34 +21,11 @@ def parse_polar_file(
     context: str = "",
     run_quality_checks: bool = True,
 ) -> pd.DataFrame:
-    """Parsea un fichero de polar XFOIL en un DataFrame.
-
-    Columnas devueltas: ``alpha``, ``cl``, ``cd``, ``cm``, ``ld``.
-
-    Parameters
-    ----------
-    polar_path : Path or str
-        Ruta al fichero de salida de XFOIL.
-    context : str
-        Identificador del caso (ej. "cruise/root") para mensajes de log.
-    run_quality_checks : bool
-        Si True, ejecuta ``validate_polar_quality`` y registra los avisos.
-
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame vacío si no se encontraron datos válidos.
-
-    Notes
-    -----
-    - Las líneas con menos de 5 campos numéricos se omiten.
-    - ``cd`` negativo o nulo produce ``ld = NaN`` (no divide por cero).
-    - Si el fichero no existe lanza ``FileNotFoundError``.
-    """
+    """Parse an XFOIL polar file into a DataFrame with columns: alpha, cl, cd, cm, ld."""
     polar_path = Path(polar_path)
     if not polar_path.exists():
         raise FileNotFoundError(
-            f"Fichero polar no encontrado [{context}]: {polar_path}"
+            f"Polar file not found [{context}]: {polar_path}"
         )
 
     rows: List[dict] = []
@@ -77,13 +38,12 @@ def parse_polar_file(
                 continue
             parts = stripped.split()
 
-            # Primera columna debe ser un número (alpha)
             try:
                 alpha = float(parts[0])
             except (ValueError, IndexError):
                 continue
 
-            # Necesitamos al menos alpha, CL, CD, CDp, CM (5 campos)
+            # Need at least alpha, CL, CD, CDp, CM (5 fields)
             if len(parts) < 5:
                 n_skipped += 1
                 continue
@@ -101,7 +61,7 @@ def parse_polar_file(
 
     if n_skipped > 0:
         LOGGER.debug(
-            "Parser XFOIL [%s]: %d líneas omitidas (cabeceras o malformadas)",
+            "XFOIL parser [%s]: %d lines skipped (headers or malformed)",
             context or polar_path.name,
             n_skipped,
         )
@@ -110,22 +70,21 @@ def parse_polar_file(
 
     if df.empty:
         LOGGER.warning(
-            "Polar XFOIL vacío [%s]: %s — sin datos numéricos válidos.",
+            "Empty XFOIL polar [%s]: %s — no valid numeric data.",
             context or "?",
             polar_path,
         )
         return df
 
-    # Comprobaciones de calidad
     if run_quality_checks:
         warnings: List[PolarQualityWarning] = validate_polar_quality(
             df, context=context or polar_path.stem
         )
         for w in warnings:
-            LOGGER.warning("Calidad polar [%s] %s: %s", w.context, w.code, w.message)
+            LOGGER.warning("Polar quality [%s] %s: %s", w.context, w.code, w.message)
 
     LOGGER.debug(
-        "Polar XFOIL parseado [%s]: %d puntos, α=[%.1f, %.1f], CL=[%.3f, %.3f]",
+        "XFOIL polar parsed [%s]: %d points, α=[%.1f, %.1f], CL=[%.3f, %.3f]",
         context or polar_path.stem,
         len(df),
         df["alpha"].min(),

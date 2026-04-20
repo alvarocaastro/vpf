@@ -1,23 +1,4 @@
-"""
-settings.py
------------
-Fuente única de verdad para todas las constantes físicas y parámetros de simulación
-del pipeline VPF. Cero "magic numbers" repartidos por el código.
-
-Organización
-------------
-PhysicsConstants   — coeficientes empíricos y límites físicos (invariantes)
-XfoilSettings      — parámetros de la integración con XFOIL
-PipelineSettings   — configuración completa cargada de los YAML
-
-Uso típico
-----------
-    from vfp_analysis.settings import get_settings
-    cfg = get_settings()
-    print(cfg.physics.SNEL_A)          # → 3.0
-    print(cfg.xfoil.TIMEOUT_FINAL_S)   # → 180.0
-    print(cfg.flight_conditions)       # → ['takeoff', 'climb', ...]
-"""
+"""settings.py — single source of truth for all physics constants and simulation parameters."""
 
 from __future__ import annotations
 
@@ -31,21 +12,18 @@ import yaml
 from vfp_analysis import config as _base
 
 # ---------------------------------------------------------------------------
-# Constantes físicas / coeficientes empíricos (no cambian con el config YAML)
+# Physics constants / empirical coefficients (not overridden by YAML)
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class PhysicsConstants:
-    """Coeficientes empíricos y límites físicos del análisis aerodinámico VPF.
-
-    Todos los valores tienen referencia bibliográfica en el docstring del campo.
-    """
+    """Empirical coefficients and physical limits for the VPF aerodynamic pipeline."""
 
     # ------------------------------------------------------------------
-    # Detección de incidencia óptima (segundo pico de CL/CD)
+    # Optimal incidence detection (second CL/CD peak)
     # ------------------------------------------------------------------
     ALPHA_MIN_OPT_DEG: float = 1.0
-    """Ángulo mínimo para buscar el pico óptimo [°].
+    """Minimum angle for optimal peak search [°].
     Avoids the very-low-alpha (< 1°) laminar separation bubble artefact
     predicted by XFOIL while still allowing the true Mach-dependent peak
     (typically 2.2–3.5° across fan operating conditions) to be found.
@@ -54,70 +32,70 @@ class PhysicsConstants:
     Ref: Drela (1989) XFOIL docs; Selig & McGranahan (2004)."""
 
     CL_MIN_3D: float = 0.30
-    """CL mínimo para considerar un punto como operativo en polares 3D.
-    Ref: criterio de diseño de fans de alto bypass (Cumpsty 2004, cap. 9)."""
+    """Minimum CL for a point to be considered operational in 3D polars.
+    Ref: high-bypass fan design criterion (Cumpsty 2004, ch. 9)."""
 
     # ------------------------------------------------------------------
-    # Correcciones de cascada
+    # Cascade corrections
     # ------------------------------------------------------------------
     CARTER_M_NACA6: float = 0.23
-    """Coeficiente m de la regla de Carter para NACA 6-series (a/c = 0.5).
+    """Carter's rule m coefficient for NACA 6-series (a/c = 0.5).
     Ref: Carter (1950), NACA TN-2273, Table 1; ESDU 05017."""
 
     WEINIG_SIGMA_MIN: float = 0.10
-    """Solidez mínima de validez del factor de Weinig.
-    Ref: Weinig (1935); Dixon & Hall (2013), ec. 3.54."""
+    """Minimum solidity for Weinig factor validity.
+    Ref: Weinig (1935); Dixon & Hall (2013), eq. 3.54."""
 
     WEINIG_SIGMA_MAX: float = 2.50
-    """Solidez máxima de validez del factor de Weinig."""
+    """Maximum solidity for Weinig factor validity."""
 
     # ------------------------------------------------------------------
-    # Correcciones rotacionales 3D (Snel et al.)
+    # 3D rotational corrections (Snel et al.)
     # ------------------------------------------------------------------
     SNEL_A: float = 3.0
-    """Coeficiente empírico a de la corrección rotacional de Snel para flujo adherido.
+    """Empirical coefficient a in Snel's rotational correction for attached flow.
     ΔCL_rot = a · (c/r)² · CL_2D
     Ref: Snel, Houwink & Bosschers (1994), ECN-C--94-004, sec. 2.3."""
 
     # ------------------------------------------------------------------
-    # Zona de diseño eficiente del fan (diagrama φ-ψ)
+    # Efficient fan design zone (φ-ψ diagram)
     # ------------------------------------------------------------------
     PHI_DESIGN_MIN: float = 0.35
-    """Límite inferior del coeficiente de caudal φ en la zona de diseño.
-    Ref: Dixon & Hall (2013), cap. 5; Cumpsty (2004), cap. 2."""
+    """Lower bound of flow coefficient φ in design zone.
+    Ref: Dixon & Hall (2013), ch. 5; Cumpsty (2004), ch. 2."""
 
     PHI_DESIGN_MAX: float = 0.55
-    """Límite superior del coeficiente de caudal φ en la zona de diseño."""
+    """Upper bound of flow coefficient φ in design zone."""
 
     PSI_DESIGN_MIN: float = 0.25
-    """Límite inferior del coeficiente de trabajo ψ en la zona de diseño."""
+    """Lower bound of work coefficient ψ in design zone."""
 
     PSI_DESIGN_MAX: float = 0.50
-    """Límite superior del coeficiente de trabajo ψ en la zona de diseño."""
+    """Upper bound of work coefficient ψ in design zone."""
 
     # ------------------------------------------------------------------
-    # Calidad mínima de un polar válido
+    # Minimum quality of a valid polar
     # ------------------------------------------------------------------
     POLAR_MIN_ROWS: int = 10
-    """Número mínimo de puntos para considerar un polar útil."""
+    """Minimum number of points to consider a polar usable."""
 
     POLAR_CL_MAX_PHYSICAL: float = 2.5
-    """CL máximo físicamente razonable para un perfil subsónico."""
+    """Maximum physically reasonable CL for a subsonic airfoil."""
 
     POLAR_CD_MIN_PHYSICAL: float = 1e-6
-    """CD mínimo físicamente razonable (CD > 0 siempre)."""
+    """Minimum physically reasonable CD (CD > 0 always)."""
 
     # ------------------------------------------------------------------
-    # Rangos físicos de operación
+    # Physical operating ranges
     # ------------------------------------------------------------------
     REYNOLDS_MIN: float = 1e4
-    """Reynolds mínimo para flujo viscoso significativo."""
+    """Minimum Reynolds for significant viscous flow."""
 
     REYNOLDS_MAX: float = 1e9
-    """Reynolds máximo físicamente razonable para perfiles delgados."""
+    """Maximum physically reasonable Reynolds for thin airfoils."""
 
     MACH_MAX_SUBSONIC: float = 0.99
-    """Mach máximo para análisis subsónico (M < 1 estrictamente)."""
+    """Maximum Mach for subsonic analysis (M < 1 strictly)."""
 
     MACH_KT_VALID_MAX: float = 0.87
     """Upper Mach limit for Kármán-Tsien validity.
@@ -130,24 +108,23 @@ class PhysicsConstants:
 
 @dataclass(frozen=True)
 class XfoilSettings:
-    """Parámetros de configuración de la integración Python-XFOIL."""
+    """XFOIL integration configuration."""
 
     ITER: int = 200
-    """Número máximo de iteraciones de viscoso por punto α.
-    Ref: Drela (1989) XFOIL docs — valor por defecto aumentado para polares
-    en condiciones de alta Re y Mach."""
+    """Max viscous iterations per α point.
+    Ref: Drela (1989) XFOIL docs — increased from default for high-Re/Mach polars."""
 
     TIMEOUT_SELECTION_S: float = 60.0
-    """Timeout en Stage 1 (selección de perfil): α range pequeño, single Re."""
+    """Timeout for Stage 1 (airfoil selection): small α range, single Re."""
 
     TIMEOUT_FINAL_S: float = 180.0
-    """Timeout en Stage 2 (simulaciones finales): α range completo, 12 casos."""
+    """Timeout for Stage 2 (final simulations): full α range, 12 cases."""
 
     MAX_RETRIES: int = 3
-    """Número máximo de reintentos ante fallo de XFOIL (timeout o código ≠ 0)."""
+    """Max retries on XFOIL failure (timeout or non-zero exit code)."""
 
     RETRY_WAIT_S: float = 1.0
-    """Espera entre reintentos [s]."""
+    """Wait between retries [s]."""
 
     CONVERGENCE_WARN_KEYWORDS: tuple = (
         "VISCAL",
@@ -156,16 +133,16 @@ class XfoilSettings:
         "MRCHDU",
         "MRCHD",
     )
-    """Cadenas que identifican fallos de convergencia en el stdout de XFOIL."""
+    """Keywords identifying convergence failures in XFOIL stdout."""
 
 
 # ---------------------------------------------------------------------------
-# Configuración completa del pipeline (cargada desde YAML)
+# Full pipeline configuration (loaded from YAML)
 # ---------------------------------------------------------------------------
 
 @dataclass
 class FanGeometry:
-    """Geometría del fan de paso variable."""
+    """Variable-pitch fan geometry."""
     rpm: float
     omega_rad_s: float
     radii_m: Dict[str, float]
@@ -174,7 +151,7 @@ class FanGeometry:
 
 @dataclass
 class BladeGeometry:
-    """Geometría de la pala (para correcciones de cascada y rotacionales)."""
+    """Blade geometry for cascade and rotational corrections."""
     num_blades: int
     chord_m: Dict[str, float]
     theta_camber_deg: float
@@ -182,45 +159,35 @@ class BladeGeometry:
 
 @dataclass
 class AirfoilGeometry:
-    """Parámetros geométricos del perfil para correcciones de compresibilidad."""
+    """Airfoil geometric parameters for compressibility corrections."""
     thickness_ratio: float  # t/c
     korn_kappa: float       # factor κ de Korn (drag divergence)
 
 
 @dataclass
 class PipelineSettings:
-    """Configuración completa del pipeline, cargada de los archivos YAML.
-
-    Punto de entrada único para todos los parámetros de simulación.
-    Usar ``get_settings()`` para obtener la instancia cacheada.
-    """
-    # Constantes físicas (invariantes)
+    """Full pipeline configuration loaded from YAML files. Use ``get_settings()`` for the cached instance."""
     physics: PhysicsConstants = field(default_factory=PhysicsConstants)
     xfoil: XfoilSettings = field(default_factory=XfoilSettings)
 
-    # Condiciones y secciones
     flight_conditions: List[str] = field(default_factory=list)
     blade_sections: List[str] = field(default_factory=list)
 
-    # Parámetros de simulación por condición
     reynolds_table: Dict[str, Dict[str, float]] = field(default_factory=dict)
     ncrit_table: Dict[str, float] = field(default_factory=dict)
     target_mach: Dict[str, float] = field(default_factory=dict)
     reference_mach: float = 0.2
 
-    # Rango de alpha para XFOIL
     alpha_min: float = -5.0
     alpha_max: float = 23.0
     alpha_step: float = 0.15
 
-    # Alpha para Stage 1 (selección)
     selection_alpha_min: float = -5.0
     selection_alpha_max: float = 20.0
     selection_alpha_step: float = 0.15
     selection_reynolds: float = 3.0e6
     selection_ncrit: float = 7.0
 
-    # Geometría
     fan: FanGeometry = field(default_factory=lambda: FanGeometry(
         rpm=4500.0, omega_rad_s=471.24, radii_m={}, axial_velocity_m_s={},
     ))
@@ -231,12 +198,11 @@ class PipelineSettings:
         thickness_ratio=0.10, korn_kappa=0.87,
     ))
 
-    # Rutas de salida
     results_dir: Path = field(default_factory=lambda: _base.RESULTS_DIR)
 
 
 # ---------------------------------------------------------------------------
-# Carga y caché
+# Load and cache
 # ---------------------------------------------------------------------------
 
 _SETTINGS_CACHE: PipelineSettings | None = None
@@ -245,15 +211,7 @@ _SETTINGS_CACHE: PipelineSettings | None = None
 def get_settings(
     analysis_config_path: Path | None = None,
 ) -> PipelineSettings:
-    """Retorna la instancia cacheada de PipelineSettings.
-
-    La primera llamada carga los archivos YAML; las siguientes son instantáneas.
-
-    Parameters
-    ----------
-    analysis_config_path : Path, optional
-        Ruta a ``analysis_config.yaml``. Por defecto usa ``config/analysis_config.yaml``.
-    """
+    """Return cached PipelineSettings. First call loads YAML; subsequent calls are instant."""
     global _SETTINGS_CACHE
     if _SETTINGS_CACHE is not None:
         return _SETTINGS_CACHE
@@ -262,29 +220,27 @@ def get_settings(
 
 
 def clear_settings_cache() -> None:
-    """Invalida la caché de settings (útil en tests)."""
+    """Invalidate the settings cache (useful in tests)."""
     global _SETTINGS_CACHE
     _SETTINGS_CACHE = None
 
 
 def _load_settings(config_path: Path | None) -> PipelineSettings:
-    """Carga y valida los parámetros desde los archivos YAML."""
+    """Load and validate parameters from YAML files."""
     if config_path is None:
         config_path = _base.ROOT_DIR / "config" / "analysis_config.yaml"
 
     if not config_path.exists():
         raise FileNotFoundError(
-            f"Archivo de configuración no encontrado: {config_path}"
+            f"Configuration file not found: {config_path}"
         )
 
     with config_path.open("r", encoding="utf-8") as f:
         raw: Dict[str, Any] = yaml.safe_load(f)
 
-    # --- condiciones y secciones ---
     flight_conditions: List[str] = raw["flight_conditions"]
     blade_sections: List[str] = raw["blade_sections"]
 
-    # --- tablas Re / Ncrit / Mach ---
     reynolds_table = {
         flight: {section: float(v) for section, v in sections.items()}
         for flight, sections in raw["reynolds"].items()
@@ -292,12 +248,10 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
     ncrit_table = {k: float(v) for k, v in raw["ncrit"].items()}
     target_mach = {k: float(v) for k, v in raw["target_mach"].items()}
 
-    # --- alpha ranges ---
     alpha_cfg = raw["alpha"]
     sel_cfg = raw.get("selection_alpha", alpha_cfg)
     sel = raw.get("selection", {})
 
-    # --- geometría fan ---
     fg = raw["fan_geometry"]
     rpm = float(fg["rpm"])
     fan = FanGeometry(
@@ -307,7 +261,6 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
         axial_velocity_m_s={k: float(v) for k, v in fg["axial_velocity"].items()},
     )
 
-    # --- geometría pala ---
     bg = raw["blade_geometry"]
     blade = BladeGeometry(
         num_blades=int(bg["num_blades"]),
@@ -315,14 +268,13 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
         theta_camber_deg=float(bg["theta_camber_deg"]),
     )
 
-    # --- geometría perfil ---
     ag = raw.get("airfoil_geometry", {})
     airfoil_geom = AirfoilGeometry(
         thickness_ratio=float(ag.get("thickness_ratio", 0.10)),
         korn_kappa=float(ag.get("korn_kappa", 0.87)),
     )
 
-    # --- xfoil settings (optional section, falls back to hardcoded defaults) ---
+    # xfoil settings (optional section, falls back to hardcoded defaults)
     xf_raw = raw.get("xfoil", {})
     import dataclasses as _dc
     xfoil_settings = _dc.replace(

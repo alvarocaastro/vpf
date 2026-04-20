@@ -177,17 +177,14 @@ def clear_results() -> None:
     Delete previous simulation outputs so that each run starts clean.
 
     This removes:
-    - All files in POLARS_DIR (CSV y TXT de polares anteriores)
+    - All files in POLARS_DIR
     - The summary CSV in RESULTS_DIR, if present
     """
-
-    # Borrar polares (CSV/TXT)
     if POLARS_DIR.is_dir():
         for path in POLARS_DIR.iterdir():
             if path.is_file():
                 path.unlink(missing_ok=True)
 
-    # Borrar resumen
     summary_path = RESULTS_DIR / "summary_pitch_performance.csv"
     if summary_path.is_file():
         summary_path.unlink(missing_ok=True)

@@ -154,7 +154,14 @@ def compute_rotational_corrections(
     chords: Dict[str, float] = blade_geometry["chord"]
     radii = get_blade_radii()
 
-    cl_col = "cl_corrected" if "cl_corrected" in df_polars.columns else "cl"
+    # Prefer cascade-corrected CL (Weinig applied upstream), then compressibility-corrected,
+    # then raw XFOIL. This ensures the cascade correction propagates into the 3D model.
+    if "cl_cascade" in df_polars.columns:
+        cl_col = "cl_cascade"
+    elif "cl_corrected" in df_polars.columns:
+        cl_col = "cl_corrected"
+    else:
+        cl_col = "cl"
 
     results: List[RotationalCorrectionResult] = []
 
@@ -280,7 +287,12 @@ def compute_rotational_corrections_du_selig(
     rpm = get_fan_rpm()
     omega = rpm * (2.0 * math.pi / 60.0)
 
-    cl_col = "cl_corrected" if "cl_corrected" in df_polars.columns else "cl"
+    if "cl_cascade" in df_polars.columns:
+        cl_col = "cl_cascade"
+    elif "cl_corrected" in df_polars.columns:
+        cl_col = "cl_corrected"
+    else:
+        cl_col = "cl"
 
     results: List[DuSeligCorrectionResult] = []
 
@@ -355,7 +367,12 @@ def build_3d_polar_map(
 
     chords = blade_geometry["chord"]
     radii = get_blade_radii()
-    cl_col = "cl_corrected" if "cl_corrected" in df_polars.columns else "cl"
+    if "cl_cascade" in df_polars.columns:
+        cl_col = "cl_cascade"
+    elif "cl_corrected" in df_polars.columns:
+        cl_col = "cl_corrected"
+    else:
+        cl_col = "cl"
 
     polar_map: Dict[tuple, pd.DataFrame] = {}
     for condition in df_polars["condition"].unique():

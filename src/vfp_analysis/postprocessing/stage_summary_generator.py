@@ -138,9 +138,12 @@ def generate_stage3_summary(stage_dir: Path) -> str:
     sects    = get_blade_sections()
     mach_tab = get_target_mach()
 
-    lines = _header(3, "PRANDTL-GLAUERT COMPRESSIBILITY CORRECTIONS")
+    lines = _header(3, "COMPRESSIBILITY CORRECTIONS (PG + KARMAN-TSIEN + WAVE DRAG)")
     lines += [
-        "Correction model : Prandtl-Glauert  (CL only; CD unchanged)",
+        "Correction chain : 1) Prandtl-Glauert (CL, CM)  [M < 0.70]",
+        "                   2) Karman-Tsien non-linear    [M <= MACH_KT_VALID_MAX]",
+        "                   3) Lock's 4th-power wave drag (Korn Mdd, κ=0.87)",
+        "                      ΔCD_wave capped at 0.025 (250 cts) above onset",
         "Reference Mach   : 0.20",
         "",
         "Target Mach numbers:",

@@ -151,14 +151,14 @@ class FinalAnalysisService:
             ax_eff.set_xlabel(r"$\alpha$ [°]")
             ax_eff.set_ylabel(r"$C_L/C_D$")
             ax_eff.set_title(
-                f"Eficiencia aerodinámica — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
+                f"Aerodynamic efficiency — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
             )
             ax_eff.legend(loc="lower right")
             fig_eff.tight_layout()
             fig_eff.savefig(out_dir / "efficiency_plot.png")
             plt.close(fig_eff)
 
-            # 2) CL vs alpha con marca de entrada en pérdidas
+            # 2) CL vs alpha with stall onset marker
             fig_cl, ax_cl = plt.subplots(figsize=(5.5, 4.2))
             ax_cl.plot(df["alpha"], df["cl"], color="#4477AA", label=r"$C_L$")
 
@@ -166,7 +166,7 @@ class FinalAnalysisService:
                 # Marker at CL_max (stall onset)
                 ax_cl.scatter(alpha_stall, cl_stall, color="#EE6677", s=90, zorder=5,
                               edgecolors="white", linewidths=1.2,
-                              label=rf"Entrada en pérdidas: $\alpha_{{stall}}$ = {alpha_stall:.1f}°,  $C_{{L,max}}$ = {cl_stall:.3f}")
+                              label=rf"Stall onset: $\alpha_{{stall}}$ = {alpha_stall:.1f}°,  $C_{{L,max}}$ = {cl_stall:.3f}")
                 ax_cl.axvline(alpha_stall, color="#EE6677", linestyle="--",
                               linewidth=1.4, alpha=0.8, zorder=4)
                 # Horizontal reference at CL_max
@@ -184,7 +184,7 @@ class FinalAnalysisService:
             ax_cl.set_xlabel(r"$\alpha$ [°]")
             ax_cl.set_ylabel(r"$C_L$")
             ax_cl.set_title(
-                f"$C_L$ vs $\\alpha$ — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
+                f"$C_L$ vs $\\alpha$ — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ').title()}"
             )
             ax_cl.legend(
                 bbox_to_anchor=(0.5, -0.22), loc="upper center",
@@ -194,13 +194,13 @@ class FinalAnalysisService:
             fig_cl.savefig(out_dir / "cl_alpha_stall.png")
             plt.close(fig_cl)
 
-            # 3) Polar CL–CD
+            # 3) CL–CD polar
             fig_pol, ax_pol = plt.subplots(figsize=(5.5, 4.2))
             ax_pol.plot(df["cd"], df["cl"], color="#4477AA", linewidth=1.8)
             ax_pol.set_xlabel(r"$C_D$")
             ax_pol.set_ylabel(r"$C_L$")
             ax_pol.set_title(
-                f"Polar $C_L$–$C_D$ — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ')}"
+                f"$C_L$–$C_D$ polar — {cfg.flight_name.capitalize()} / {cfg.section.name.replace('_', ' ').title()}"
             )
             fig_pol.tight_layout()
             fig_pol.savefig(out_dir / "polar_plot.png")

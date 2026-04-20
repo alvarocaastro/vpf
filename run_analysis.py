@@ -1,24 +1,15 @@
 """
-run_analysis.py
----------------
-Punto de entrada del pipeline aerodinámico completo del análisis VPF.
+run_analysis.py — Entry point for the complete VPF aerodynamic analysis pipeline.
 
-Ejecuta 8 pasos en secuencia con I/O explícito entre stages:
-
-  1. Limpiar resultados anteriores
-  2. Stage 1 — Selección de perfil aerodinámico  → Stage1Result
-  3. Stage 2 — Simulaciones XFOIL (12 polares)   → Stage2Result
-  4. Stage 3 — Correcciones de compresibilidad   → Stage3Result
-  5. Stage 4 — Métricas de rendimiento + figuras → Stage4Result
-  6. Stage 5 — Pitch & Kinematics (3D completo)  → Stage5Result
-  7. Stage 6 — Reverse Thrust Modeling           → Stage6Result
-  8. Stage 7 — Análisis SFC                      → Stage7Result
-
-Cada step valida sus outputs antes de pasar al siguiente, garantizando
-que ningún stage se ejecuta con datos incompletos o inconsistentes.
-
-Uso:
-    python run_analysis.py
+Runs 8 stages in sequence with explicit I/O contracts between them:
+  1. Clean previous results
+  2. Stage 1 — Airfoil selection           → Stage1Result
+  3. Stage 2 — XFOIL simulations           → Stage2Result
+  4. Stage 3 — Compressibility corrections → Stage3Result
+  5. Stage 4 — Performance metrics         → Stage4Result
+  6. Stage 5 — Pitch & Kinematics (3D)     → Stage5Result
+  7. Stage 6 — Reverse Thrust Modeling     → Stage6Result
+  8. Stage 7 — SFC Analysis               → Stage7Result
 """
 
 from __future__ import annotations
@@ -30,7 +21,6 @@ from pathlib import Path
 
 import pandas as pd
 
-# Añadir src al path antes de cualquier import del paquete
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from vfp_analysis import config as base_config
@@ -118,36 +108,30 @@ def _section(title: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Paso 1 — Limpieza
+# Step 1 — Cleanup
 # ---------------------------------------------------------------------------
 
 def step_1_clean_results() -> None:
-    """Elimina resultados de ejecuciones anteriores para partir de cero."""
-    _section("PASO 1: Limpiando resultados anteriores")
+    """Delete results from previous runs."""
+    _section("STEP 1: Cleaning previous results")
 
     for stage_num in sorted(base_config.STAGE_DIR_NAMES):
         stage_dir = base_config.get_stage_dir(stage_num)
         if stage_dir.exists():
-            LOGGER.info("Eliminando: %s", stage_dir)
+            LOGGER.info("Removing: %s", stage_dir)
             shutil.rmtree(stage_dir, ignore_errors=True)
         stage_dir.mkdir(parents=True, exist_ok=True)
 
-    LOGGER.info("Limpieza completada.")
+    LOGGER.info("Cleanup complete.")
 
 
 # ---------------------------------------------------------------------------
-# Paso 2 — Stage 1
+# Step 2 — Stage 1
 # ---------------------------------------------------------------------------
 
 def step_2_airfoil_selection() -> Stage1Result:
-    """Stage 1: Selección automática de perfil aerodinámico.
-
-    Returns
-    -------
-    Stage1Result
-        Perfil seleccionado, rutas de salida y directorio del stage.
-    """
-    _section("PASO 2 / STAGE 1: Selección de perfil aerodinámico")
+    """Stage 1: Automatic airfoil selection."""
+    _section("STEP 2 / STAGE 1: Airfoil selection")
 
     cfg = get_settings()
     stage1_dir = base_config.get_stage_dir(1)
@@ -173,17 +157,17 @@ def step_2_airfoil_selection() -> Stage1Result:
 
     if not airfoils:
         raise RuntimeError(
-            f"No se encontraron ficheros .dat en {base_config.AIRFOIL_DATA_DIR}. "
-            "Verifica que la carpeta data/airfoils/ contiene los perfiles."
+            f"No .dat files found in {base_config.AIRFOIL_DATA_DIR}. "
+            "Ensure data/airfoils/ contains the airfoil profiles."
         )
 
-    LOGGER.info("Candidatos encontrados: %d perfiles", len(airfoils))
+    LOGGER.info("Candidates found: %d airfoils", len(airfoils))
 
     xfoil = XfoilRunnerAdapter(final_analysis=False)
     service = AirfoilSelectionService(xfoil_runner=xfoil, results_dir=stage1_dir)
     result = service.run_selection(airfoils, selection_condition)
 
-    LOGGER.info("Perfil seleccionado: %s", result.best_airfoil.name)
+    LOGGER.info("Selected airfoil: %s", result.best_airfoil.name)
 
     summary_text = generate_stage1_summary(stage1_dir, result.best_airfoil.name)
     write_stage_summary(1, summary_text, stage1_dir)
@@ -199,23 +183,12 @@ def step_2_airfoil_selection() -> Stage1Result:
 
 
 # ---------------------------------------------------------------------------
-# Paso 3 — Stage 2
+# Step 3 — Stage 2
 # ---------------------------------------------------------------------------
 
 def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
-    """Stage 2: Simulaciones XFOIL del perfil seleccionado.
-
-    Parameters
-    ----------
-    s1 : Stage1Result
-        Resultado del stage anterior (perfil seleccionado).
-
-    Returns
-    -------
-    Stage2Result
-        Directorio de polares, mapa de alpha óptimo y estadísticas.
-    """
-    _section("PASO 3 / STAGE 2: Simulaciones XFOIL")
+    """Stage 2: XFOIL simulations for the selected airfoil."""
+    _section("STEP 3 / STAGE 2: XFOIL simulations")
 
     cfg = get_settings()
     stage2_dir = base_config.get_stage_dir(2)
@@ -240,7 +213,7 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
             )
 
     LOGGER.info(
-        "Ejecutando %d simulaciones XFOIL para %s...",
+        "Running %d XFOIL simulations for %s...",
         len(configs),
         s1.selected_airfoil_name,
     )
@@ -257,14 +230,12 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
 
     n_conv_warnings = getattr(service, "_total_convergence_warnings", 0)
 
-    # Organizar polares en estructura plana
     source_polars = stage2_dir / "simulation_plots"
     target_polars = stage2_dir / "polars"
     organize_polars(
         source_polars, target_polars, cfg.flight_conditions, cfg.blade_sections
     )
 
-    # Mapa de paso (cinemática preliminar de Stage 2)
     pitch_map_dir = stage2_dir / "pitch_map"
     pitch_map_dir.mkdir(parents=True, exist_ok=True)
 
@@ -279,11 +250,10 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
     plot_pitch_map(pitch_df, delta_beta, pitch_map_dir)
 
     LOGGER.info(
-        "Δβ por sección: %s",
+        "Delta-beta per section: %s",
         ", ".join(f"{s}={v:.1f}°" for s, v in delta_beta.items()),
     )
 
-    # Figuras de argumento VPF
     polar_dfs = {}
     for flight in cfg.flight_conditions:
         for section in cfg.blade_sections:
@@ -315,8 +285,8 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
 
     if n_conv_warnings > 0:
         LOGGER.warning(
-            "Stage 2: %d aviso(s) de convergencia XFOIL — "
-            "revisa los polares afectados antes de continuar.",
+            "Stage 2: %d XFOIL convergence warning(s) — "
+            "review affected polars before continuing.",
             n_conv_warnings,
         )
 
@@ -324,23 +294,12 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
 
 
 # ---------------------------------------------------------------------------
-# Paso 4 — Stage 3
+# Step 4 — Stage 3
 # ---------------------------------------------------------------------------
 
 def step_4_compressibility_correction(s2: Stage2Result) -> Stage3Result:
-    """Stage 3: Correcciones de compresibilidad (PG + Kármán-Tsien + wave drag).
-
-    Parameters
-    ----------
-    s2 : Stage2Result
-        Resultado de Stage 2 (directorio de polares fuente).
-
-    Returns
-    -------
-    Stage3Result
-        Directorio de polares corregidos y estadísticas.
-    """
-    _section("PASO 4 / STAGE 3: Correcciones de compresibilidad")
+    """Stage 3: Compressibility corrections (PG + Karman-Tsien + wave drag)."""
+    _section("STEP 4 / STAGE 3: Compressibility corrections")
 
     cfg = get_settings()
     stage3_dir = base_config.get_stage_dir(3)
@@ -367,15 +326,15 @@ def step_4_compressibility_correction(s2: Stage2Result) -> Stage3Result:
         for section in cfg.blade_sections:
             polar_path = s2.source_polars / flight.lower() / section / "polar.csv"
             if not polar_path.exists():
-                LOGGER.warning("Polar no encontrado, omitiendo: %s", polar_path)
+                LOGGER.warning("Polar not found, skipping: %s", polar_path)
                 n_fail += 1
                 continue
-            LOGGER.info("Corrigiendo %s/%s (M=%.2f)", flight, section, mach)
+            LOGGER.info("Correcting %s/%s (M=%.2f)", flight, section, mach)
             try:
                 service.correct_case(case, polar_path, section)
                 n_ok += 1
             except Exception as exc:
-                LOGGER.warning("Error corrigiendo %s/%s: %s", flight, section, exc)
+                LOGGER.warning("Error correcting %s/%s: %s", flight, section, exc)
                 n_fail += 1
 
     service.plot_section_summary(stage3_dir, cfg.flight_conditions, cfg.blade_sections)
@@ -392,36 +351,25 @@ def step_4_compressibility_correction(s2: Stage2Result) -> Stage3Result:
     s3.validate()
 
     LOGGER.info(
-        "Stage 3: %d/%d casos corregidos (%.0f%% éxito)",
+        "Stage 3: %d/%d cases corrected (%.0f%% success rate)",
         n_ok, n_ok + n_fail, s3.success_rate * 100,
     )
     return s3
 
 
 # ---------------------------------------------------------------------------
-# Paso 5 — Stage 4
+# Step 5 — Stage 4
 # ---------------------------------------------------------------------------
 
 def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
-    """Stage 4: Métricas aerodinámicas + figuras de publicación.
-
-    Parameters
-    ----------
-    s3 : Stage3Result
-        Resultado de Stage 3 (polares corregidos).
-
-    Returns
-    -------
-    Stage4Result
-        Métricas calculadas y rutas a tablas/figuras.
-    """
-    _section("PASO 5 / STAGE 4: Métricas de rendimiento + figuras")
+    """Stage 4: Aerodynamic metrics + publication figures."""
+    _section("STEP 5 / STAGE 4: Performance metrics + figures")
 
     cfg = get_settings()
     stage2_dir = base_config.get_stage_dir(2)
     polars_dir = s3.corrected_dir if s3.corrected_dir.exists() else stage2_dir / "simulation_plots"
 
-    LOGGER.info("Leyendo polares desde: %s", polars_dir)
+    LOGGER.info("Reading polars from: %s", polars_dir)
 
     metrics = compute_all_metrics(
         polars_dir,
@@ -437,7 +385,7 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
         blade_radii=cfg.fan.radii_m,
         fan_rpm=cfg.fan.rpm,
     )
-    LOGGER.info("Métricas calculadas: %d casos", len(metrics))
+    LOGGER.info("Metrics computed: %d cases", len(metrics))
 
     stage4_dir = base_config.get_stage_dir(4)
     tables_dir  = stage4_dir / "tables"
@@ -446,7 +394,7 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
     export_summary_table(metrics, tables_dir / "summary_table.csv")
     export_clcd_max_table(metrics, tables_dir / "clcd_max_by_section.csv")
 
-    # publication_figures usa los polares planos de Stage 2 (columna 'ld')
+    # publication_figures uses the flat Stage 2 polars (column 'ld')
     stage2_polars_flat = base_config.get_stage_dir(2) / "polars"
 
     generate_stage4_figures(metrics, stage4_dir / "figures", polars_dir=polars_dir)
@@ -460,7 +408,7 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
         reynolds_table=cfg.reynolds_table,
     )
 
-    LOGGER.info("Figuras de publicación generadas en: %s", figures_dir)
+    LOGGER.info("Publication figures generated in: %s", figures_dir)
 
     summary_text = generate_stage4_summary(stage4_dir, metrics)
     write_stage_summary(4, summary_text, stage4_dir)
@@ -468,7 +416,7 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
     s4 = Stage4Result(
         metrics=metrics,
         tables_dir=tables_dir,
-        figures_dir=figures_dir,  # stage4_dir / "figures"
+        figures_dir=figures_dir,
         stage_dir=stage4_dir,
     )
     s4.validate()
@@ -476,18 +424,12 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
 
 
 # ---------------------------------------------------------------------------
-# Paso 6 — Stage 5
+# Step 6 — Stage 5
 # ---------------------------------------------------------------------------
 
 def step_6_pitch_kinematics() -> Stage5Result:
-    """Stage 5: Análisis completo de paso, incidencia y cinemática (3D).
-
-    Returns
-    -------
-    Stage5Result
-        Directorios de tablas/figuras y métricas clave.
-    """
-    _section("PASO 6 / STAGE 5: Pitch & Kinematics Analysis")
+    """Stage 5: Full pitch, incidence and kinematics analysis (3D)."""
+    _section("STEP 6 / STAGE 5: Pitch & Kinematics Analysis")
 
     run_pitch_kinematics()
 
@@ -497,7 +439,6 @@ def step_6_pitch_kinematics() -> Stage5Result:
     n_tables    = len(list(tables_dir.glob("*.csv"))) if tables_dir.exists() else 0
     n_figures   = len(list(figures_dir.glob("*.png"))) if figures_dir.exists() else 0
 
-    # Extraer métricas clave del CSV de twist
     twist_total = float("nan")
     max_loss    = float("nan")
     twist_file  = tables_dir / "blade_twist_design.csv"
@@ -531,19 +472,12 @@ def step_6_pitch_kinematics() -> Stage5Result:
 
 
 # ---------------------------------------------------------------------------
-# Paso 7 — Stage 6: Reverse Thrust
+# Step 7 — Stage 6: Reverse Thrust
 # ---------------------------------------------------------------------------
 
 def step_7_reverse_thrust() -> Stage6Result:
-    """Stage 6: VPF Reverse Thrust Modeling.
-
-    Returns
-    -------
-    Stage6Result
-        Optimal reverse pitch angle, thrust fraction, mechanism weight
-        and cruise SFC penalty.
-    """
-    _section("PASO 7 / STAGE 6: Reverse Thrust Modeling")
+    """Stage 6: VPF Reverse Thrust Modeling."""
+    _section("STEP 7 / STAGE 6: Reverse Thrust Modeling")
 
     run_reverse_thrust()
 
@@ -554,7 +488,6 @@ def step_7_reverse_thrust() -> Stage6Result:
     n_tables  = len(list(tables_dir.glob("*.csv")))  if tables_dir.exists()  else 0
     n_figures = len(list(figures_dir.glob("*.png"))) if figures_dir.exists() else 0
 
-    # Extract key metrics
     beta_opt   = float("nan")
     thrust_frac = float("nan")
     mech_weight = float("nan")
@@ -590,18 +523,12 @@ def step_7_reverse_thrust() -> Stage6Result:
 
 
 # ---------------------------------------------------------------------------
-# Paso 8 — Stage 7: SFC Analysis
+# Step 8 — Stage 7: SFC Analysis
 # ---------------------------------------------------------------------------
 
 def step_8_sfc_analysis() -> Stage7Result:
-    """Stage 7: Impacto del VPF en el consumo específico de combustible.
-
-    Returns
-    -------
-    Stage7Result
-        Directorios y reducción media de SFC.
-    """
-    _section("PASO 8 / STAGE 7: SFC Impact Analysis")
+    """Stage 7: VPF impact on specific fuel consumption."""
+    _section("STEP 8 / STAGE 7: SFC Impact Analysis")
 
     run_sfc_analysis()
 
@@ -635,9 +562,9 @@ def step_8_sfc_analysis() -> Stage7Result:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Ejecuta el pipeline completo con validación de contratos entre stages."""
+    """Run the full pipeline with inter-stage contract validation."""
     LOGGER.info("=" * 80)
-    LOGGER.info("Pipeline VPF — Análisis Aerodinámico Completo")
+    LOGGER.info("VPF Pipeline — Complete Aerodynamic Analysis")
     LOGGER.info("=" * 80)
 
     try:
@@ -651,29 +578,29 @@ def main() -> None:
         s7 = step_8_sfc_analysis()
 
         LOGGER.info("=" * 80)
-        LOGGER.info("Pipeline completado con éxito.")
+        LOGGER.info("Pipeline completed successfully.")
         LOGGER.info("")
-        LOGGER.info("Resumen de outputs:")
-        LOGGER.info("  Stage 1: %s (perfil: %s)", s1.stage_dir, s1.selected_airfoil_name)
-        LOGGER.info("  Stage 2: %d simulaciones, %d avisos convergencia",
+        LOGGER.info("Output summary:")
+        LOGGER.info("  Stage 1: %s (airfoil: %s)", s1.stage_dir, s1.selected_airfoil_name)
+        LOGGER.info("  Stage 2: %d simulations, %d convergence warnings",
                     s2.n_simulations, s2.n_convergence_warnings)
-        LOGGER.info("  Stage 3: %d/%d polares corregidos",
+        LOGGER.info("  Stage 3: %d/%d polars corrected",
                     s3.n_cases_corrected, s3.n_cases_corrected + s3.n_cases_failed)
-        LOGGER.info("  Stage 4: %d métricas calculadas", len(s4.metrics))
-        LOGGER.info("  Stage 5: %d tablas, %d figuras | twist=%.1f° | pérdida_max=%.1f%%",
+        LOGGER.info("  Stage 4: %d metrics computed", len(s4.metrics))
+        LOGGER.info("  Stage 5: %d tables, %d figures | twist=%.1f° | max_loss=%.1f%%",
                     s5.n_tables, s5.n_figures, s5.twist_total_deg, s5.max_off_design_loss_pct)
-        LOGGER.info("  Stage 6: β_opt=%.1f° | T_rev=%.1f%% fwd | mecanismo=%.0f kg | ΔSFC=+%.3f%%",
+        LOGGER.info("  Stage 6: beta_opt=%.1f° | T_rev=%.1f%% fwd | mechanism=%.0f kg | ΔSFC=+%.3f%%",
                     s6.beta_opt_deg, s6.thrust_fraction * 100,
                     s6.mechanism_weight_kg, s6.sfc_cruise_penalty_pct)
-        LOGGER.info("  Stage 7: reducción SFC media = %.2f%%", s7.mean_sfc_reduction_pct)
+        LOGGER.info("  Stage 7: mean SFC reduction = %.2f%%", s7.mean_sfc_reduction_pct)
         LOGGER.info("")
-        LOGGER.info("Resultados en:")
+        LOGGER.info("Results in:")
         for stage_num, stage_name in sorted(base_config.STAGE_DIR_NAMES.items()):
             LOGGER.info("  Stage %d: %s", stage_num, base_config.RESULTS_DIR / stage_name)
         LOGGER.info("=" * 80)
 
     except Exception as exc:
-        LOGGER.error("El pipeline falló: %s", exc, exc_info=True)
+        LOGGER.error("Pipeline failed: %s", exc, exc_info=True)
         sys.exit(1)
 
 
