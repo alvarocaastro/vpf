@@ -149,9 +149,9 @@ def plot_design_reference_section(
         section_label = SECTION_LABELS.get(section, section)
         ax.set_xlabel(r"$\alpha$ (°)")
         ax.set_ylabel(r"$C_L/C_D$")
-        ax.set_title(f"$C_L/C_D$ vs $\\alpha$ — Sección {section_label}")
+        ax.set_title(f"$C_L/C_D$ vs $\\alpha$ — {section_label} section")
         ax.legend(
-            title="Condición",
+            title="Condition",
             bbox_to_anchor=(1.02, 1),
             loc="upper left",
             borderaxespad=0,

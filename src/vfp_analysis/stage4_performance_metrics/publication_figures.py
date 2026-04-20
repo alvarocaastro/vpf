@@ -1,22 +1,4 @@
-"""
-publication_figures.py
-----------------------
-Genera las figuras de publicación para la tesis.
-
-Este módulo produce las figuras de calidad publicación que documentan los
-resultados principales del análisis VPF. Estaba en stage5_publication_figures/;
-ahora es un sub-módulo de stage4_performance_metrics/ porque no introduce
-ninguna transformación de datos nueva — sólo visualiza los resultados de Stage 4.
-
-Figuras generadas:
-  1. efficiency_plots          — CL/CD vs α con α_opt marcado (una por caso)
-  2. efficiency_by_section     — comparación por sección por condición de vuelo
-  3. alpha_opt_vs_condition    — figura central de la tesis: matriz de α_opt
-
-Figuras extendidas (requieren polares corregidas de Stage 3):
-  A. section_polar_comparison  — polar de eficiencia + sustentación por condición
-  B. cruise_penalty_figure     — prueba visual de la penalización de paso fijo
-"""
+"""publication_figures.py — publication-quality figures for VPF Stage 4 results."""
 
 from __future__ import annotations
 
@@ -40,16 +22,11 @@ from vfp_analysis.stage4_performance_metrics.metrics import AerodynamicMetrics
 
 LOGGER = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Estilo académico — aplicado una vez al importar el módulo
-# ---------------------------------------------------------------------------
-
-# Paleta de colores por condición de vuelo (usada en comparaciones y alpha_opt)
 CONDITION_COLORS: Dict[str, str] = {
-    "takeoff": "#E31A1C",   # rojo
-    "climb":   "#FF7F00",   # naranja
-    "cruise":  "#1F78B4",   # azul (condición de referencia)
-    "descent": "#6A3D9A",   # violeta
+    "takeoff": "#E31A1C",   # red
+    "climb":   "#FF7F00",   # orange
+    "cruise":  "#1F78B4",   # blue (reference condition)
+    "descent": "#6A3D9A",   # violet
 }
 
 _ACADEMIC_STYLE: Dict = {
@@ -87,23 +64,19 @@ _ACADEMIC_STYLE: Dict = {
 
 mpl.rcParams.update(_ACADEMIC_STYLE)
 
-# Ángulo de crucero de referencia — línea sobre los resúmenes
+# Cruise reference angle — shown as a dashed line on comparison figures
 _ALPHA_CRUISE_REF: float = 5.0
 
 
-# ---------------------------------------------------------------------------
-# Helpers internos
-# ---------------------------------------------------------------------------
-
 def _alpha_cruise_reference(ax: plt.Axes, alpha_val: float = _ALPHA_CRUISE_REF) -> None:
-    """Dibuja línea vertical discontinua en el ángulo de referencia de crucero."""
+    """Draw dashed vertical line at the cruise reference angle."""
     ax.axvline(
         alpha_val,
         color="0.45",
         linestyle="--",
         linewidth=0.9,
         alpha=0.7,
-        label=rf"Referencia crucero — $\alpha$ = {alpha_val:.1f}°",
+        label=rf"Cruise reference — $\alpha$ = {alpha_val:.1f}°",
         zorder=2,
     )
 
@@ -116,7 +89,7 @@ def _smart_annotation(
     x_range: float,
     y_range: float,
 ) -> None:
-    """Anota (x, y) con un offset proporcional al rango de datos del eje."""
+    """Annotate (x, y) with an offset proportional to the axis data range."""
     dx = 0.06 * x_range
     dy = 0.06 * y_range
     ax.annotate(
@@ -136,7 +109,7 @@ def _load_corrected_polar(
     condition: str,
     section: str,
 ) -> Optional[pd.DataFrame]:
-    """Carga corrected_polar.csv de Stage 3. Devuelve None si no existe."""
+    """Load corrected_polar.csv from Stage 3. Returns None if not found."""
     path = stage3_dir / condition.lower() / section / "corrected_polar.csv"
     if not path.exists():
         LOGGER.warning("Corrected polar not found: %s", path)
@@ -149,7 +122,7 @@ def _interpolate_ld_at_alpha(
     eff_col: str,
     alpha_target: float,
 ) -> Optional[float]:
-    """Interpolación lineal de eficiencia en un ángulo dado."""
+    """Linearly interpolate efficiency at a given angle."""
     df_clean = df.replace([np.inf, -np.inf], np.nan).dropna(subset=[eff_col, "alpha"])
     if df_clean.empty:
         return None
@@ -166,15 +139,11 @@ def _interpolate_ld_at_alpha(
 
 
 def _format_reynolds(re: float) -> str:
-    """Formatea Reynolds como cadena LaTeX, p. ej. 'Re = 2.5×10⁶'."""
+    """Format Reynolds number as LaTeX string, e.g. 'Re = 2.5×10⁶'."""
     exp = int(np.floor(np.log10(re)))
     coeff = re / 10 ** exp
     return rf"Re = {coeff:.1f}$\times 10^{{{exp}}}$"
 
-
-# ---------------------------------------------------------------------------
-# Figura 1 — CL/CD vs α por caso individual, α_opt marcado
-# ---------------------------------------------------------------------------
 
 def generate_efficiency_plots(
     polars_dir: Path,
@@ -182,7 +151,7 @@ def generate_efficiency_plots(
     flight_conditions: List[str],
     blade_sections: List[str],
 ) -> None:
-    """Genera curvas CL/CD vs α para cada par (condición, sección)."""
+    """Generate CL/CD vs α curves for each (condition, section) pair."""
     figures_dir.mkdir(parents=True, exist_ok=True)
     settings = get_plot_settings()
     w = settings["figure_size"]["width"]
@@ -233,16 +202,12 @@ def generate_efficiency_plots(
             ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
             ax.set_ylabel(r"Lift-to-drag ratio $C_L/C_D$ [–]")
             section_label = section.replace("_", " ").title()
-            ax.set_title(f"Eficiencia aerodinámica — {flight.capitalize()} / {section_label}")
+            ax.set_title(f"Aerodynamic efficiency — {flight.capitalize()} / {section_label}")
             ax.legend(loc="lower right")
             fig.tight_layout()
             fig.savefig(figures_dir / f"efficiency_{flight}_{section}.png")
             plt.close(fig)
 
-
-# ---------------------------------------------------------------------------
-# Figura 2 — Comparación por sección (curvas CL/CD superpuestas por condición)
-# ---------------------------------------------------------------------------
 
 def generate_efficiency_by_section(
     polars_dir: Path,
@@ -250,7 +215,7 @@ def generate_efficiency_by_section(
     flight_conditions: List[str],
     alpha_cruise_ref: float = _ALPHA_CRUISE_REF,
 ) -> None:
-    """Genera curvas CL/CD vs α comparando root, mid_span y tip por condición."""
+    """Generate CL/CD vs α curves comparing root, mid_span and tip per condition."""
     figures_dir.mkdir(parents=True, exist_ok=True)
     settings = get_plot_settings()
     w = settings["figure_size"]["width"]
@@ -300,27 +265,19 @@ def generate_efficiency_by_section(
         _alpha_cruise_reference(ax, alpha_cruise_ref)
         ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax.set_ylabel(r"Lift-to-drag ratio $C_L/C_D$ [–]")
-        ax.set_title(f"$C_L/C_D$ por sección de pala — {flight.capitalize()}")
+        ax.set_title(f"$C_L/C_D$ by blade section — {flight.capitalize()}")
         ax.legend(loc="lower right")
         fig.tight_layout()
         fig.savefig(figures_dir / f"efficiency_by_section_{flight}.png")
         plt.close(fig)
 
 
-# ---------------------------------------------------------------------------
-# Figura 3 — Matriz α_opt: figura central de la tesis
-# ---------------------------------------------------------------------------
-
 def generate_alpha_opt_vs_condition(
     metrics: List[AerodynamicMetrics],
     figures_dir: Path,
     alpha_cruise_ref: float = _ALPHA_CRUISE_REF,
 ) -> None:
-    """
-    Genera la figura central de la tesis: α_opt agrupado por condición de vuelo
-    y sección de pala. Muestra visualmente por qué el paso fijo de crucero no
-    es óptimo en otras condiciones.
-    """
+    """Generate central thesis figure: α_opt grouped by flight condition and blade section."""
     figures_dir.mkdir(parents=True, exist_ok=True)
     settings = get_plot_settings()
     w = settings["figure_size"]["width"]
@@ -354,13 +311,13 @@ def generate_alpha_opt_vs_condition(
     ax.axhline(
         alpha_cruise_ref,
         color="0.35", linestyle="--", linewidth=1.0,
-        label=rf"Referencia crucero — $\alpha$ = {alpha_cruise_ref:.1f}°",
+        label=rf"Cruise reference — $\alpha$ = {alpha_cruise_ref:.1f}°",
         zorder=2,
     )
 
     ax.set_xlabel("Flight Condition")
     ax.set_ylabel(r"Optimal angle of attack $\alpha_{opt}$ [°]")
-    ax.set_title(r"$\alpha_{opt}$ por condición de vuelo y sección de pala", pad=10)
+    ax.set_title(r"$\alpha_{opt}$ by flight condition and blade section", pad=10)
     ax.set_xticks(x + width)
     ax.set_xticklabels([fc.title() for fc in flight_conditions])
     ax.legend(loc="lower right")
@@ -370,21 +327,13 @@ def generate_alpha_opt_vs_condition(
     plt.close(fig)
 
 
-# ---------------------------------------------------------------------------
-# Figura A — Comparación de polares por sección (eficiencia + sustentación)
-# ---------------------------------------------------------------------------
-
 def generate_section_polar_comparison(
     stage3_dir: Path,
     figures_dir: Path,
     flight_conditions: List[str],
     blade_sections: Optional[List[str]] = None,
 ) -> None:
-    """
-    Por cada condición de vuelo genera una figura de doble panel:
-      - Izquierda: CL/CD_corrected vs α para root, mid_span, tip
-      - Derecha:   CL_corrected vs α para root, mid_span, tip
-    """
+    """Generate two-panel figure per condition: CL/CD_corrected and CL_corrected vs α."""
     figures_dir.mkdir(parents=True, exist_ok=True)
     settings = get_plot_settings()
     w = settings["figure_size"]["width"]
@@ -444,24 +393,20 @@ def generate_section_polar_comparison(
 
         ax_eff.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax_eff.set_ylabel(r"$C_L/C_D$ (Prandtl-Glauert corrected) [–]")
-        ax_eff.set_title(f"Polar de eficiencia — {flight.capitalize()}")
+        ax_eff.set_title(f"Efficiency polar — {flight.capitalize()}")
         ax_eff.legend(loc="lower right")
 
         ax_cl.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax_cl.set_ylabel(r"$C_L$ (Prandtl-Glauert corrected) [–]")
-        ax_cl.set_title(f"Polar de sustentación — {flight.capitalize()}")
+        ax_cl.set_title(f"Lift polar — {flight.capitalize()}")
         ax_cl.legend(loc="lower right")
 
-        fig.suptitle(f"Comparación por sección de pala — {flight.capitalize()}",
+        fig.suptitle(f"Blade section comparison — {flight.capitalize()}",
                      fontsize=11, fontweight="bold")
         fig.tight_layout()
         fig.savefig(figures_dir / f"section_polar_comparison_{flight}.png")
         plt.close(fig)
 
-
-# ---------------------------------------------------------------------------
-# Figura B — Penalización de crucero (prueba visual del VPF)
-# ---------------------------------------------------------------------------
 
 def generate_cruise_penalty_figure(
     stage3_dir: Path,
@@ -471,12 +416,9 @@ def generate_cruise_penalty_figure(
     reynolds_table: Optional[Dict[str, Dict[str, float]]] = None,
     alpha_min_second_peak: float = 3.0,
 ) -> None:
-    """
-    Por cada condición no-crucero genera una figura con:
-      - Curvas CL/CD_corrected vs α para las tres secciones (con Re en leyenda)
-      - Estrella verde en α_opt VPF por sección
-      - Línea roja discontinua en α_cruise_design (paso fijo)
-      - Anotación con el % de penalización en la sección mid_span
+    """Generate VPF efficiency gain figure for each non-cruise condition.
+
+    Shows CL/CD vs α for all sections, VPF α_opt markers, and fixed-pitch reference line.
     """
     figures_dir.mkdir(parents=True, exist_ok=True)
     settings = get_plot_settings()
@@ -487,7 +429,7 @@ def generate_cruise_penalty_figure(
     conditions = non_cruise_conditions or ["takeoff", "climb", "descent"]
     re_table  = reynolds_table or {}
 
-    # Derivar alpha_cruise_design de los datos (no hardcodeado)
+    # Derive alpha_cruise_design from data (not hardcoded)
     alpha_cruise_design: float = _ALPHA_CRUISE_REF
     cruise_df = _load_corrected_polar(stage3_dir, "cruise", "mid_span")
     if cruise_df is not None:
@@ -548,7 +490,7 @@ def generate_cruise_penalty_figure(
         ax.axvline(
             alpha_cruise_design,
             color="#B22222", linestyle="--", linewidth=1.4, zorder=5,
-            label=rf"Paso fijo crucero — $\alpha_{{design}}$ = {alpha_cruise_design:.1f}°",
+            label=rf"Fixed cruise pitch — $\alpha_{{design}}$ = {alpha_cruise_design:.1f}°",
         )
 
         if mid_span_ld_opt is not None:
@@ -570,16 +512,12 @@ def generate_cruise_penalty_figure(
 
         ax.set_xlabel(r"Angle of attack $\alpha$ [°]")
         ax.set_ylabel(r"$C_L/C_D$ (Prandtl-Glauert corrected) [–]")
-        ax.set_title(f"Ganancia de eficiencia VPF — {condition.capitalize()}", pad=8)
+        ax.set_title(f"VPF efficiency gain — {condition.capitalize()}", pad=8)
         ax.legend(loc="lower right", fontsize=8)
         fig.tight_layout()
         fig.savefig(figures_dir / f"cruise_penalty_{condition}.png")
         plt.close(fig)
 
-
-# ---------------------------------------------------------------------------
-# Orquestador
-# ---------------------------------------------------------------------------
 
 def generate_all_figures(
     polars_dir: Path,
@@ -590,32 +528,19 @@ def generate_all_figures(
     stage3_dir: Optional[Path] = None,
     reynolds_table: Optional[Dict[str, Dict[str, float]]] = None,
 ) -> None:
-    """
-    Genera todas las figuras de publicación para la tesis.
-
-    Figuras básicas (polares de Stage 2):
-      1. generate_efficiency_by_section  — curvas CL/CD por sección, agrupadas por condición
-      2. generate_alpha_opt_vs_condition — figura central: matriz α_opt
-
-    Figuras extendidas (polares corregidas de Stage 3, requiere *stage3_dir*):
-      A. generate_section_polar_comparison
-      B. generate_cruise_penalty_figure
-
-    Nota: las curvas CL/CD vs α individuales (una por condición × sección) se generan
-    en Stage 2 (efficiency_plot.png) y no se duplican aquí.
-    """
-    LOGGER.info("Generando comparación por sección...")
+    """Generate all publication figures. Stage 3 figures require *stage3_dir*."""
+    LOGGER.info("Generating efficiency comparison by section...")
     generate_efficiency_by_section(polars_dir, figures_dir, flight_conditions)
 
-    LOGGER.info("Generando figura α_opt vs condición...")
+    LOGGER.info("Generating alpha_opt vs condition figure...")
     generate_alpha_opt_vs_condition(metrics, figures_dir)
 
     if stage3_dir is not None and stage3_dir.is_dir():
-        LOGGER.info("Generando comparación de polares por sección (Figura A)...")
+        LOGGER.info("Generating section polar comparison (Figure A)...")
         generate_section_polar_comparison(
             stage3_dir, figures_dir, flight_conditions, blade_sections
         )
-        LOGGER.info("Generando figuras de penalización de crucero (Figura B)...")
+        LOGGER.info("Generating cruise penalty figures (Figure B)...")
         non_cruise = [c for c in flight_conditions if c != "cruise"]
         generate_cruise_penalty_figure(
             stage3_dir, figures_dir,
@@ -624,6 +549,6 @@ def generate_all_figures(
             reynolds_table=reynolds_table,
         )
     else:
-        LOGGER.info("stage3_dir no disponible — omitiendo Figuras A y B.")
+        LOGGER.info("stage3_dir not available — skipping Figures A and B.")
 
-    LOGGER.info("Todas las figuras generadas en: %s", figures_dir)
+    LOGGER.info("All figures generated in: %s", figures_dir)
