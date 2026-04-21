@@ -328,10 +328,13 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
         runner = XfoilRunnerAdapter(final_analysis=True)
         service = FinalAnalysisService(runner, stage2_dir)
 
+        # Accumulate per-sim convergence stats for the summary
+        _conv_log: list[tuple[str, str, float, int]] = []
+
         with Progress(
             SpinnerColumn(spinner_name="dots12", style="bright_cyan"),
             TextColumn("[bright_cyan]{task.description}"),
-            BarColumn(bar_width=38, style="bright_cyan", complete_style="bright_green"),
+            BarColumn(bar_width=34, style="bright_cyan", complete_style="bright_green"),
             TaskProgressColumn(),
             MofNCompleteColumn(),
             TimeElapsedColumn(),
@@ -340,25 +343,84 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
             transient=True,
         ) as prg:
             sim_task = prg.add_task(
-                f"[bold]{s1.selected_airfoil_name}[/bold] — waiting…",
+                f"[bold]{s1.selected_airfoil_name}[/bold] — starting…",
                 total=n_sims,
             )
 
-            def _on_sim_done(flight: str, section: str) -> None:
+            def _on_sim_done(flight: str, section: str, conv_rate: float, conv_failures: int) -> None:
+                _conv_log.append((flight, section, conv_rate, conv_failures))
+                pct = conv_rate * 100
+                # Colour the rate: green ≥80%, yellow ≥60%, red <60%
+                if pct >= 80:
+                    rate_str = f"[bright_green]{pct:.0f}%[/bright_green]"
+                elif pct >= 60:
+                    rate_str = f"[yellow]{pct:.0f}%[/yellow]"
+                else:
+                    rate_str = f"[bright_red]{pct:.0f}%[/bright_red]"
+
                 prg.advance(sim_task)
                 remaining = n_sims - int(prg.tasks[sim_task].completed)
-                if remaining > 0:
-                    prg.update(
-                        sim_task,
-                        description=f"[bold]{s1.selected_airfoil_name}[/bold] — "
-                                    f"[dim]{flight}[/dim]/[dim]{section}[/dim] ✔",
-                    )
-                else:
-                    prg.update(sim_task, description=f"[bold]{s1.selected_airfoil_name}[/bold] — done ✔")
+                label = (
+                    f"[bold]{s1.selected_airfoil_name}[/bold]  "
+                    f"[dim]{flight}/{section}[/dim]  conv={rate_str}"
+                    + (f"  [dim]({remaining} left)[/dim]" if remaining > 0 else "  [bold bright_green]done ✔[/bold bright_green]")
+                )
+                prg.update(sim_task, description=label)
 
             alpha_eff_map, stall_map = service.run(airfoil, configs, progress_callback=_on_sim_done)
 
         n_conv_warnings = getattr(service, "_total_convergence_warnings", 0)
+
+        # ── Convergence quality table ────────────────────────────────────────
+        conv_table = Table(
+            title="[bold bright_cyan]XFOIL Convergence Quality — Stage 2[/bold bright_cyan]",
+            box=box.SIMPLE_HEAVY,
+            border_style="cyan",
+            header_style="bold white",
+            show_lines=False,
+            padding=(0, 1),
+        )
+        conv_table.add_column("Flight", style="bold cyan", no_wrap=True)
+        conv_table.add_column("Section", style="white", no_wrap=True)
+        conv_table.add_column("Conv. rate", justify="right", no_wrap=True)
+        conv_table.add_column("Failed pts", justify="right", style="dim")
+        conv_table.add_column("Análisis OK?", justify="center", no_wrap=True)
+
+        overall_rates: list[float] = []
+        for flight, section, conv_rate, conv_failures in _conv_log:
+            pct = conv_rate * 100
+            overall_rates.append(conv_rate)
+            if pct >= 80:
+                rate_str = f"[bright_green]{pct:.1f}%[/bright_green]"
+                ok_str   = "[bright_green]✔ Sí[/bright_green]"
+            elif pct >= 60:
+                rate_str = f"[yellow]{pct:.1f}%[/yellow]"
+                ok_str   = "[yellow]⚠ Aceptable[/yellow]"
+            else:
+                rate_str = f"[bright_red]{pct:.1f}%[/bright_red]"
+                ok_str   = "[bright_red]✘ Revisar[/bright_red]"
+            fail_str = str(conv_failures) if conv_failures > 0 else "[dim]0[/dim]"
+            conv_table.add_row(flight, section, rate_str, fail_str, ok_str)
+
+        if overall_rates:
+            mean_rate = sum(overall_rates) / len(overall_rates) * 100
+            mean_color = "bright_green" if mean_rate >= 80 else ("yellow" if mean_rate >= 60 else "bright_red")
+            conv_table.add_section()
+            conv_table.add_row(
+                "[bold]MEDIA[/bold]", "",
+                f"[bold {mean_color}]{mean_rate:.1f}%[/bold {mean_color}]",
+                "", "",
+            )
+
+        console.print()
+        console.print(conv_table)
+
+        # Criterion note
+        console.print(
+            "    [dim]Nota: fallos ocurren en zona post-stall (α > stall), "
+            "fuera del rango operativo del fan. α_opt converge siempre.[/dim]"
+        )
+        console.print()
 
         # Post-processing (pitch map, plots, organize polars)
         console.print("    [vpf.info]Post-processing: organising polars & pitch maps…[/vpf.info]")

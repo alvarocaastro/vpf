@@ -47,7 +47,7 @@ class FinalAnalysisService:
         self,
         airfoil: Airfoil,
         configs: Iterable[FinalSimulationConfig],
-        progress_callback: Optional[Callable[[str, str], None]] = None,
+        progress_callback: Optional[Callable[[str, str, float, int], None]] = None,
     ) -> Tuple[Dict[Tuple[str, str], float], Dict[Tuple[str, str], Tuple[float, float]]]:
         """
         Execute all final simulations.
@@ -58,9 +58,10 @@ class FinalAnalysisService:
             Airfoil geometry to simulate.
         configs : Iterable[FinalSimulationConfig]
             One entry per (flight_condition, blade_section) combination.
-        progress_callback : callable(flight_name, section_name) | None
-            If provided, called after each config completes. Useful for
-            updating a progress bar in the calling script.
+        progress_callback : callable(flight_name, section_name, conv_rate, conv_failures) | None
+            If provided, called after each config completes with the XFOIL
+            convergence rate (0–1) and number of failed alpha points.
+            Useful for updating a live progress bar in the calling script.
 
         Returns
         -------
@@ -81,10 +82,13 @@ class FinalAnalysisService:
             if xfoil_result.convergence_failures > 0:
                 self._total_convergence_warnings += 1
 
+            conv_rate     = xfoil_result.convergence_rate
+            conv_failures = xfoil_result.convergence_failures
+
             df = self._build_polar_df(polar_path, airfoil, cfg)
             if df.empty:
                 if progress_callback is not None:
-                    progress_callback(cfg.flight_name, cfg.section.name)
+                    progress_callback(cfg.flight_name, cfg.section.name, conv_rate, conv_failures)
                 continue
 
             self._export_csv(df, out_dir)
@@ -93,7 +97,7 @@ class FinalAnalysisService:
             stall_map[(cfg.flight_name, cfg.section.name)] = (alpha_stall, cl_max)
 
             if progress_callback is not None:
-                progress_callback(cfg.flight_name, cfg.section.name)
+                progress_callback(cfg.flight_name, cfg.section.name, conv_rate, conv_failures)
 
         return alpha_eff_map, stall_map
 
