@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence
+from typing import Callable, List, Optional, Sequence
 
 import pandas as pd
 
@@ -34,6 +34,7 @@ class AirfoilSelectionService:
         self,
         airfoils: Sequence[Airfoil],
         condition: SimulationCondition,
+        progress_callback: Optional[Callable[[str], None]] = None,
     ) -> AirfoilSelectionResult:
         """Run XFOIL for all airfoils at a single reference condition."""
 
@@ -52,6 +53,8 @@ class AirfoilSelectionService:
         )
 
         for airfoil in airfoils:
+            if progress_callback is not None:
+                progress_callback(airfoil.name)
             out_file = out_dir / f"{airfoil.name.replace(' ', '_')}_polar.txt"
             LOGGER.info("  Running XFOIL: %s", airfoil.name)
 

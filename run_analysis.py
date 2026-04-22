@@ -260,16 +260,12 @@ def step_2_airfoil_selection() -> Stage1Result:
             xfoil = XfoilRunnerAdapter(final_analysis=False)
             service = AirfoilSelectionService(xfoil_runner=xfoil, results_dir=stage1_dir)
 
-            # Monkey-patch a callback onto the service so we can tick the bar
-            _orig = service.run_selection
-            def _ticked_run(af_list, cond):  # noqa: E306
-                for af in af_list:
-                    prg.update(task, description=f"XFOIL: [bold]{af.name}[/bold]")
-                res = _orig(af_list, cond)
-                prg.update(task, completed=len(af_list))
-                return res
+            def _on_airfoil(name: str) -> None:
+                prg.update(task, advance=1, description=f"XFOIL: [bold]{name}[/bold]")
 
-            result = _ticked_run(airfoils, selection_condition)
+            result = service.run_selection(
+                airfoils, selection_condition, progress_callback=_on_airfoil
+            )
 
         console.print(f"    [vpf.ok]→[/vpf.ok]  Selected airfoil: "
                       f"[vpf.highlight]{result.best_airfoil.name}[/vpf.highlight]")
