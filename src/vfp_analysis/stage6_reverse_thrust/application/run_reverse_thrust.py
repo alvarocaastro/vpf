@@ -43,13 +43,9 @@ from vfp_analysis.stage6_reverse_thrust.adapters.filesystem.data_loader import (
 from vfp_analysis.stage6_reverse_thrust.adapters.filesystem.results_writer import (
     ReverseResultsWriter,
 )
-from vfp_analysis.stage6_reverse_thrust.core.services.mechanism_weight_service import (
+from vfp_analysis.stage6_reverse_thrust.reverse_thrust_core import (
     compute_mechanism_weight,
-)
-from vfp_analysis.stage6_reverse_thrust.core.services.reverse_kinematics_service import (
     compute_reverse_kinematics,
-)
-from vfp_analysis.stage6_reverse_thrust.core.services.reverse_thrust_service import (
     compute_reverse_sweep,
     select_optimal_point,
 )

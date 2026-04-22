@@ -53,14 +53,10 @@ from vfp_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
     SfcSectionResult,
     SfcSensitivityPoint,
 )
-from vfp_analysis.stage7_sfc_analysis.core.services.mission_analysis_service import (
+from vfp_analysis.stage7_sfc_analysis.sfc_core import (
     compute_mission_fuel_burn,
-)
-from vfp_analysis.stage7_sfc_analysis.core.services.sfc_analysis_service import (
     compute_sfc_analysis,
     compute_sfc_sensitivity,
-)
-from vfp_analysis.stage7_sfc_analysis.core.services.summary_generator_service import (
     generate_sfc_summary,
 )
 
