@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from vfp_analysis.pipeline.contracts import (
+from vpf_analysis.pipeline.contracts import (
     Stage4Result,
     Stage5Result,
     Stage6Result,

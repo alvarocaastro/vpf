@@ -1,0 +1,373 @@
+"""
+run_sfc_analysis.py
+-------------------
+Stage 7 orchestrator: Specific Fuel Consumption (SFC) Analysis.
+
+Reads aerodynamic performance data from Stage 4 and estimates the SFC reduction
+enabled by the variable pitch fan, comparing VPF (α_opt) vs fixed pitch (α_design).
+
+Inputs:
+    results/stage4_performance_metrics/tables/summary_table.csv
+    config/engine_parameters.yaml
+
+Outputs (in results/stage7_sfc_analysis/):
+    tables/sfc_section_breakdown.csv     — ε, Δη per condition × section
+    tables/sfc_analysis.csv              — aggregated results per condition
+    tables/sfc_sensitivity.csv           — τ sweep × condition
+    tables/mission_fuel_burn.csv         — fuel saving per mission phase
+    figures/sfc_improvement_by_condition.png — CL/CD_fixed vs CL/CD_vpf per section
+    figures/fuel_saving_vs_clcd.png          — fuel saving vs CL/CD (GE9X parametric)
+    figures/sfc_sensitivity_k_throttle.png   — SFC sensitivity to k_throttle
+    sfc_analysis_summary.txt
+    finalresults_stage6.txt
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import List
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import yaml
+
+from vpf_analysis import settings as base_config
+from vpf_analysis.shared.plot_style import (
+    FLIGHT_LABELS,
+    SECTION_LABELS,
+    apply_style,
+)
+from vpf_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
+    EngineBaseline,
+    MissionFuelBurnResult,
+    MissionSummary,
+    SfcAnalysisResult,
+    SfcSectionResult,
+    SfcSensitivityPoint,
+)
+from vpf_analysis.stage7_sfc_analysis.sfc_core import (
+    compute_mission_fuel_burn,
+    compute_sfc_analysis,
+    compute_sfc_sensitivity,
+    generate_sfc_summary,
+)
+from vpf_analysis.stage7_sfc_analysis.engine.ge9x_analysis import run_ge9x_analysis
+
+LOGGER = logging.getLogger(__name__)
+
+_COLOR_BASELINE = "#4393C3"
+_COLOR_VPF      = "#4DAC26"
+
+_CONDITIONS_ORDER = ["takeoff", "climb", "cruise", "descent"]
+_SECTIONS_ORDER   = ["root", "mid_span", "tip"]
+
+
+# ---------------------------------------------------------------------------
+# Figures
+# ---------------------------------------------------------------------------
+
+def generate_sfc_figures(
+    sfc_results: List[SfcAnalysisResult],
+    section_results: List[SfcSectionResult],
+    sensitivity_results: List[SfcSensitivityPoint],
+    figures_dir: Path,
+    mission_phase_results: List[MissionFuelBurnResult] | None = None,
+    mission_summary: MissionSummary | None = None,
+) -> None:
+    """Generate the essential Stage 7 figure."""
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    with apply_style():
+        _plot_fixed_vs_vpf_efficiency(section_results, figures_dir)
+
+
+def _plot_fixed_vs_vpf_efficiency(
+    section_results: List[SfcSectionResult],
+    figures_dir: Path,
+) -> None:
+    """2×2 subplots: CL/CD fixed pitch vs VPF per section, for each condition.
+
+    Saved as ``sfc_improvement_by_condition.png``.
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharey=False)
+    conditions = [c for c in _CONDITIONS_ORDER]
+
+    for ax, cond in zip(axes.flat, conditions):
+        subset = [r for r in section_results if r.condition == cond]
+        x = np.arange(len(_SECTIONS_ORDER))
+        fixed = [next((r.cl_cd_fixed for r in subset if r.blade_section == s), 0.0)
+                 for s in _SECTIONS_ORDER]
+        vpf   = [next((r.cl_cd_vpf   for r in subset if r.blade_section == s), 0.0)
+                 for s in _SECTIONS_ORDER]
+
+        bars_f = ax.bar(x - 0.20, fixed, 0.35, label=r"Fixed pitch ($\alpha_{design}$)",
+                        color=_COLOR_BASELINE, edgecolor="white", linewidth=0.5, zorder=3)
+        bars_v = ax.bar(x + 0.20, vpf,   0.35, label=r"VPF ($\alpha_{opt}$)",
+                        color=_COLOR_VPF,      edgecolor="white", linewidth=0.5, zorder=3)
+        ax.bar_label(bars_f, fmt="%.0f", padding=2, fontsize=7)
+        ax.bar_label(bars_v, fmt="%.0f", padding=2, fontsize=7)
+        ax.set_xticks(x)
+        ax.set_xticklabels([SECTION_LABELS[s] for s in _SECTIONS_ORDER])
+        ax.set_title(FLIGHT_LABELS.get(cond, cond), fontsize=10, fontweight="bold")
+        ax.set_ylabel(r"$C_L/C_D$ [–]", fontsize=8)
+        ax.legend(fontsize=7, loc="lower right")
+        ax.grid(axis="y", alpha=0.3)
+
+    fig.suptitle(
+        "Profile efficiency: fixed pitch vs VPF per blade section",
+        fontsize=11, fontweight="bold", y=1.01,
+    )
+    fig.tight_layout()
+    fig.savefig(figures_dir / "sfc_improvement_by_condition.png")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# I/O helpers
+# ---------------------------------------------------------------------------
+
+def _write_section_table(
+    section_results: List[SfcSectionResult],
+    output_path: Path,
+) -> None:
+    rows = [
+        {
+            "condition":           r.condition,
+            "blade_section":       r.blade_section,
+            "CL_CD_fixed":         r.cl_cd_fixed,
+            "CL_CD_vpf":           r.cl_cd_vpf,
+            "epsilon":             r.epsilon,
+            "epsilon_eff":         r.epsilon_eff,
+            "delta_eta_profile":   r.delta_eta_profile,
+            "efficiency_gain_pct": r.efficiency_gain_pct,
+            "delta_alpha_deg":     r.delta_alpha_deg,
+        }
+        for r in section_results
+    ]
+    df = pd.DataFrame(rows).sort_values(["condition", "blade_section"])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False, float_format="%.6f")
+
+
+def _write_sfc_table(
+    sfc_results: List[SfcAnalysisResult],
+    output_path: Path,
+) -> None:
+    rows = [
+        {
+            "condition":                r.condition,
+            "CL_CD_fixed_mean":         r.cl_cd_fixed,
+            "CL_CD_vpf_mean":           r.cl_cd_vpf,
+            "epsilon_mean":             r.epsilon_mean,
+            "delta_alpha_mean_deg":     r.delta_alpha_mean_deg,
+            "k_sensitivity":            r.k_sensitivity,
+            "delta_eta_fan":            r.delta_eta_fan,
+            "fan_efficiency_baseline":  r.fan_efficiency_baseline,
+            "fan_efficiency_new":       r.fan_efficiency_new,
+            "SFC_baseline":             r.sfc_baseline,
+            "SFC_new":                  r.sfc_new,
+            "SFC_reduction_percent":    r.sfc_reduction_percent,
+        }
+        for r in sfc_results
+    ]
+    df = pd.DataFrame(rows).sort_values("condition")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False, float_format="%.6f")
+
+
+def _write_sensitivity_table(
+    sensitivity_results: List[SfcSensitivityPoint],
+    output_path: Path,
+) -> None:
+    rows = [
+        {
+            "tau":               p.tau,
+            "condition":         p.condition,
+            "epsilon_mean":      p.epsilon_mean,
+            "delta_eta_fan":     p.delta_eta_fan,
+            "eta_fan_new":       p.eta_fan_new,
+            "SFC_baseline":      p.sfc_baseline,
+            "SFC_new":           p.sfc_new,
+            "SFC_reduction_pct": p.sfc_reduction_pct,
+        }
+        for p in sensitivity_results
+    ]
+    df = pd.DataFrame(rows).sort_values(["tau", "condition"])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_path, index=False, float_format="%.6f")
+
+
+def _write_mission_table(
+    phase_results: List[MissionFuelBurnResult],
+    output_path: Path,
+) -> None:
+    rows = [
+        {
+            "phase":              p.phase,
+            "duration_min":       p.duration_min,
+            "thrust_kN":          p.thrust_kN,
+            "sfc_baseline":       p.sfc_baseline,
+            "sfc_vpf":            p.sfc_vpf,
+            "fuel_baseline_kg":   p.fuel_baseline_kg,
+            "fuel_vpf_kg":        p.fuel_vpf_kg,
+            "fuel_saving_kg":     p.fuel_saving_kg,
+            "co2_saving_kg":      p.co2_saving_kg,
+            "cost_saving_usd":    p.cost_saving_usd,
+        }
+        for p in phase_results
+    ]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(output_path, index=False, float_format="%.4f")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def run_sfc_analysis() -> None:
+    """Ejecuta el Stage 7 completo: análisis de SFC."""
+    LOGGER.info("=" * 70)
+    LOGGER.info("STAGE 7: Specific Fuel Consumption (SFC) Impact Analysis")
+    LOGGER.info("=" * 70)
+
+    stage7_dir  = base_config.get_stage_dir(7)
+    stage7_dir.mkdir(parents=True, exist_ok=True)
+    tables_dir  = stage7_dir / "tables"
+    figures_dir = stage7_dir / "figures"
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── 1. Cargar métricas de Stage 4 (fuente primaria) ──────────────────
+    stage4_tables = base_config.get_stage_dir(4) / "tables"
+    metrics_path  = stage4_tables / "summary_table.csv"
+    if not metrics_path.exists():
+        LOGGER.error(
+            "summary_table.csv no encontrado en %s — Stage 4 debe ejecutarse primero.",
+            stage4_tables,
+        )
+        return
+    metrics_df = pd.read_csv(metrics_path)
+    LOGGER.info("Métricas de Stage 4 cargadas: %d filas", len(metrics_df))
+
+    required_cols = {"flight_condition", "blade_section", "max_efficiency", "eff_at_design_alpha"}
+    missing = required_cols - set(metrics_df.columns)
+    if missing:
+        LOGGER.error("Missing columns in summary_table.csv: %s", missing)
+        return
+
+    n_cruise_valid = (metrics_df["flight_condition"] == "cruise").sum()
+    LOGGER.info("Reference condition 'cruise': %d sections", n_cruise_valid)
+
+    # ── 2. Cargar parámetros base del motor ─────────────────────────────
+    engine_config_path = base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
+    with engine_config_path.open("r", encoding="utf-8") as f:
+        _cfg = yaml.safe_load(f)
+    engine_baseline = EngineBaseline(
+        baseline_sfc=_cfg["baseline_sfc"],
+        fan_efficiency=_cfg["fan_efficiency"],
+        bypass_ratio=_cfg["bypass_ratio"],
+    )
+    LOGGER.info(
+        "Motor: SFC_base=%.4f, η_fan=%.3f, BPR=%.1f",
+        engine_baseline.baseline_sfc, engine_baseline.fan_efficiency, engine_baseline.bypass_ratio,
+    )
+
+    mw_path = base_config.get_stage_dir(6) / "tables" / "mechanism_weight.csv"
+    if mw_path.exists():
+        df_mw = pd.read_csv(mw_path)
+        idx = df_mw.set_index("metric")["value"]
+        LOGGER.info("VPF mechanism weight penalty: +%.3f%% SFC cruise", float(idx["sfc_cruise_penalty_pct"]))
+        LOGGER.info("VPF vs conventional reverser: −%.3f%% SFC cruise", float(idx["sfc_benefit_vs_conventional_pct"]))
+
+    # ── 3. Compute SFC improvements ────────────────────────────────────────
+    stage5_dir = base_config.get_stage_dir(5)
+    stage3_dir = base_config.get_stage_dir(3)
+    sfc_results, section_results = compute_sfc_analysis(
+        metrics_df, engine_baseline, engine_config_path,
+        stage5_dir=stage5_dir,
+        stage3_dir=stage3_dir,
+    )
+    LOGGER.info("SFC analysis: %d conditions, %d sections", len(sfc_results), len(section_results))
+
+    # ── 4. Sensitivity analysis to τ ─────────────────────────────────────
+    sensitivity_results = compute_sfc_sensitivity(
+        metrics_df, engine_baseline, config_path=engine_config_path,
+    )
+    LOGGER.info("Sensitivity: %d points (τ × condition)", len(sensitivity_results))
+
+    # ── 5. Mission analysis ──────────────────────────────────────────────
+    try:
+        from vpf_analysis.config_loader import get_mission_profile
+        mission_profile = get_mission_profile()
+        mission_summary, mission_phase_results = compute_mission_fuel_burn(
+            sfc_results, mission_profile,
+        )
+        LOGGER.info(
+            "Mission: saving=%.1f kg (%.2f%%), CO2=%.1f kg, cost=$%.0f",
+            mission_summary.total_fuel_saving_kg,
+            mission_summary.total_fuel_saving_pct,
+            mission_summary.total_co2_saving_kg,
+            mission_summary.total_cost_saving_usd,
+        )
+    except Exception as exc:
+        LOGGER.warning("Mission analysis not available: %s", exc)
+        mission_summary = None
+        mission_phase_results = []
+
+    # ── 6. Figures ───────────────────────────────────────────────────────
+    generate_sfc_figures(
+        sfc_results, section_results, sensitivity_results, figures_dir,
+        mission_phase_results=mission_phase_results or None,
+        mission_summary=mission_summary,
+    )
+
+    # ── 7. Tables ────────────────────────────────────────────────────────
+    _write_section_table(section_results, tables_dir / "sfc_section_breakdown.csv")
+    _write_sfc_table(sfc_results,         tables_dir / "sfc_analysis.csv")
+    _write_sensitivity_table(sensitivity_results, tables_dir / "sfc_sensitivity.csv")
+    if mission_phase_results:
+        _write_mission_table(mission_phase_results, tables_dir / "mission_fuel_burn.csv")
+
+    # ── 8. Text summaries ────────────────────────────────────────────────
+    summary_text = generate_sfc_summary(sfc_results, section_results, mission_summary=mission_summary)
+    (stage7_dir / "sfc_analysis_summary.txt").write_text(summary_text, encoding="utf-8")
+
+    from vpf_analysis.postprocessing.stage_summary_generator import (
+        generate_stage7_summary,
+        write_stage_summary,
+    )
+    stage7_summary = generate_stage7_summary(stage7_dir)
+    write_stage_summary(7, stage7_summary, stage7_dir)
+
+    # ── 9. GE9X turbofan thermodynamic SFC analysis ─────────────────────
+    stage2_dir = base_config.get_stage_dir(2)
+    try:
+        run_ge9x_analysis(
+            stage4_dir=base_config.get_stage_dir(4),
+            stage2_dir=stage2_dir,
+            tables_dir=tables_dir,
+            figures_dir=figures_dir,
+        )
+    except Exception as exc:
+        LOGGER.warning("GE9X analysis failed (non-fatal): %s", exc)
+
+    # ── 10. Log summary ──────────────────────────────────────────────────
+    if sfc_results:
+        mean_reduction = sum(r.sfc_reduction_percent for r in sfc_results) / len(sfc_results)
+        max_reduction  = max(r.sfc_reduction_percent for r in sfc_results)
+        LOGGER.info("Mean SFC reduction: %.2f%%", mean_reduction)
+        LOGGER.info("Max SFC reduction: %.2f%%", max_reduction)
+
+    LOGGER.info("=" * 70)
+    LOGGER.info("Stage 7 complete.")
+    LOGGER.info("  Tables:  %s", tables_dir)
+    LOGGER.info("  Figures: %s", figures_dir)
+    LOGGER.info("=" * 70)
+
+
+if __name__ == "__main__":
+    import logging as _logging
+    _logging.basicConfig(level=_logging.INFO,
+                         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    run_sfc_analysis()

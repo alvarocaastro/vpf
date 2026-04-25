@@ -47,12 +47,12 @@ from rich.theme import Theme
 # ── Project path setup ───────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from vfp_analysis import settings as base_config
-from vfp_analysis.adapters.xfoil.xfoil_runner_adapter import XfoilRunnerAdapter
-from vfp_analysis.core.domain.airfoil import Airfoil
-from vfp_analysis.core.domain.blade_section import BladeSection
-from vfp_analysis.core.domain.simulation_condition import SimulationCondition
-from vfp_analysis.pipeline.contracts import (
+from vpf_analysis import settings as base_config
+from vpf_analysis.adapters.xfoil.xfoil_runner_adapter import XfoilRunnerAdapter
+from vpf_analysis.core.domain.airfoil import Airfoil
+from vpf_analysis.core.domain.blade_section import BladeSection
+from vpf_analysis.core.domain.simulation_condition import SimulationCondition
+from vpf_analysis.pipeline.contracts import (
     Stage1Result,
     Stage2Result,
     Stage3Result,
@@ -61,23 +61,23 @@ from vfp_analysis.pipeline.contracts import (
     Stage6Result,
     Stage7Result,
 )
-from vfp_analysis.postprocessing.cli_tables import build_convergence_table, build_summary_table
-from vfp_analysis.postprocessing.stage_summary_generator import (
+from vpf_analysis.postprocessing.cli_tables import build_convergence_table, build_summary_table
+from vpf_analysis.postprocessing.stage_summary_generator import (
     generate_stage1_summary,
     generate_stage2_summary,
     generate_stage3_summary,
     generate_stage4_summary,
     write_stage_summary,
 )
-from vfp_analysis.settings import get_settings
-from vfp_analysis.stage1_airfoil_selection.airfoil_selection_service import (
+from vpf_analysis.settings import get_settings
+from vpf_analysis.stage1_airfoil_selection.airfoil_selection_service import (
     AirfoilSelectionService,
 )
-from vfp_analysis.stage2_xfoil_simulations.final_analysis_service import (
+from vpf_analysis.stage2_xfoil_simulations.final_analysis_service import (
     FinalAnalysisService,
     FinalSimulationConfig,
 )
-from vfp_analysis.stage2_xfoil_simulations.pitch_map import (
+from vpf_analysis.stage2_xfoil_simulations.pitch_map import (
     compute_pitch_map,
     plot_alpha_opt_evolution,
     plot_pitch_map,
@@ -85,37 +85,32 @@ from vfp_analysis.stage2_xfoil_simulations.pitch_map import (
     plot_vpf_efficiency_by_section,
     save_pitch_map_csv,
 )
-from vfp_analysis.stage3_compressibility_correction.compressibility_case import (
+from vpf_analysis.stage3_compressibility_correction.compressibility_case import (
     CompressibilityCase,
 )
-from vfp_analysis.stage3_compressibility_correction.correction_service import (
+from vpf_analysis.stage3_compressibility_correction.correction_service import (
     CompressibilityCorrectionService,
 )
-from vfp_analysis.stage3_compressibility_correction.karman_tsien import KarmanTsienModel
-from vfp_analysis.stage3_compressibility_correction.prandtl_glauert import PrandtlGlauertModel
-from vfp_analysis.stage4_performance_metrics.metrics import (
+from vpf_analysis.stage3_compressibility_correction.karman_tsien import KarmanTsienModel
+from vpf_analysis.stage3_compressibility_correction.prandtl_glauert import PrandtlGlauertModel
+from vpf_analysis.stage4_performance_metrics.metrics import (
     compute_all_metrics,
     enrich_with_cruise_reference,
 )
-from vfp_analysis.stage4_performance_metrics.narrative_figures import (
-    generate_pitch_requirement_figure,
-    generate_fixed_vs_variable_figure,
-)
-from vfp_analysis.stage4_performance_metrics.plots import (
+from vpf_analysis.stage4_performance_metrics.plots import (
     generate_all_stage4_figures,
-    generate_stage4_figures,
 )
-from vfp_analysis.stage4_performance_metrics.table_generator import (
+from vpf_analysis.stage4_performance_metrics.table_generator import (
     export_clcd_max_table,
     export_summary_table,
 )
-from vfp_analysis.stage5_pitch_kinematics.application.run_pitch_kinematics import (
+from vpf_analysis.stage5_pitch_kinematics.application.run_pitch_kinematics import (
     run_pitch_kinematics,
 )
-from vfp_analysis.stage6_reverse_thrust.application.run_reverse_thrust import (
+from vpf_analysis.stage6_reverse_thrust.application.run_reverse_thrust import (
     run_reverse_thrust,
 )
-from vfp_analysis.stage7_sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
+from vpf_analysis.stage7_sfc_analysis.application.run_sfc_analysis import run_sfc_analysis
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Console & Theme
@@ -560,13 +555,6 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
             )
 
         console.print(f"    [vpf.ok]→[/vpf.ok]  Publication figures saved to [dim]{figures_dir}[/dim]")
-
-        pitch_map_csv = base_config.get_stage_dir(2) / "pitch_map" / "blade_pitch_map.csv"
-        if pitch_map_csv.exists():
-            generate_pitch_requirement_figure(pitch_map_csv, figures_dir)
-            stage2_polars_flat = base_config.get_stage_dir(2) / "polars"
-            if stage2_polars_flat.exists():
-                generate_fixed_vs_variable_figure(stage2_polars_flat, pitch_map_csv, figures_dir)
 
         summary_text = generate_stage4_summary(stage4_dir, metrics)
         write_stage_summary(4, summary_text, stage4_dir)

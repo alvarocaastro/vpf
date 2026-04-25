@@ -16,8 +16,8 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from vfp_analysis.core.domain.airfoil import Airfoil
-from vfp_analysis.core.domain.simulation_condition import SimulationCondition
+from vpf_analysis.core.domain.airfoil import Airfoil
+from vpf_analysis.core.domain.simulation_condition import SimulationCondition
 
 
 @pytest.fixture
