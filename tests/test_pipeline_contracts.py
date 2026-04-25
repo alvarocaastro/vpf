@@ -145,7 +145,7 @@ class TestStage5ResultValidation:
             max_off_design_loss_pct=2.0,
             stage_dir=tmp_path,
         )
-        with pytest.raises(ValueError, match="tablas"):
+        with pytest.raises(ValueError, match="tables"):
             s5.validate()
 
     def test_raises_when_tables_dir_missing(self, tmp_path: Path) -> None:
@@ -204,7 +204,7 @@ class TestStage6ResultValidation:
         _valid_s6(tmp_path).validate()
 
     def test_raises_when_fewer_than_4_tables(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="tablas"):
+        with pytest.raises(ValueError, match="tables"):
             _valid_s6(tmp_path, n_tables=3).validate()
 
     def test_raises_when_thrust_fraction_zero(self, tmp_path: Path) -> None:
