@@ -162,9 +162,13 @@ def generate_fixed_vs_variable_figure(
             if cond in mid_rows.index:
                 alpha_opt = float(mid_rows.loc[cond, "alpha_opt"])
                 # Interpolate LD at alpha_opt
-                ld_at_opt = float(pf.set_index("alpha")["ld"].reindex(
-                    pf["alpha"].tolist() + [alpha_opt]
-                ).sort_index().interpolate(method="index").loc[alpha_opt])
+                interp_series = (
+                    pf.set_index("alpha")["ld"]
+                    .reindex(sorted(set(pf["alpha"].tolist() + [alpha_opt])))
+                    .interpolate(method="index")
+                )
+                val = interp_series.loc[alpha_opt]
+                ld_at_opt = float(val.iloc[0] if hasattr(val, "iloc") else val)
                 ax.axvline(alpha_opt, color=color, linestyle="--",
                            linewidth=1.1, alpha=0.7, zorder=3)
                 ax.scatter(alpha_opt, ld_at_opt, color=color, s=50,

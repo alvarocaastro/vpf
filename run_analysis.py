@@ -563,6 +563,9 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
         pitch_map_csv = base_config.get_stage_dir(2) / "pitch_map" / "blade_pitch_map.csv"
         if pitch_map_csv.exists():
             generate_pitch_requirement_figure(pitch_map_csv, figures_dir)
+            stage2_polars_flat = base_config.get_stage_dir(2) / "polars"
+            if stage2_polars_flat.exists():
+                generate_fixed_vs_variable_figure(stage2_polars_flat, pitch_map_csv, figures_dir)
 
         summary_text = generate_stage4_summary(stage4_dir, metrics)
         write_stage_summary(4, summary_text, stage4_dir)
