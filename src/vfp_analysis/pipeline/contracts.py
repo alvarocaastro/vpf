@@ -134,13 +134,11 @@ class Stage5Result:
 
 @dataclass
 class Stage6Result:
-    """Output of Stage 6: VPF reverse thrust modeling."""
+    """Output of Stage 6: VPF reverse thrust — theoretical mechanism weight analysis."""
     tables_dir: Path
     figures_dir: Path
     n_tables: int
     n_figures: int
-    beta_opt_deg: float
-    thrust_fraction: float
     mechanism_weight_kg: float
     sfc_cruise_penalty_pct: float
     stage_dir: Path
@@ -150,12 +148,8 @@ class Stage6Result:
         require_dir(self.stage_dir, "Stage 6 results dir")
         require_dir(self.tables_dir, "Stage 6 tables dir")
         require_dir(self.figures_dir, "Stage 6 figures dir")
-        if self.n_tables < 4:
-            raise ValueError(f"Stage 6: {self.n_tables} tables (expected ≥4)")
-        if not (0.0 < self.thrust_fraction < 1.0):
-            raise ValueError(
-                f"Stage 6: thrust_fraction out of physical range: {self.thrust_fraction}"
-            )
+        if self.n_tables < 1:
+            raise ValueError(f"Stage 6: {self.n_tables} tables (expected ≥1)")
         if self.mechanism_weight_kg <= 0:
             raise ValueError("Stage 6: mechanism_weight_kg must be positive")
 

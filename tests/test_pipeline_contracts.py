@@ -40,10 +40,8 @@ def _valid_s6(tmp_path: Path, **kwargs) -> Stage6Result:
     defaults = dict(
         tables_dir=tables_dir,
         figures_dir=figures_dir,
-        n_tables=4,
-        n_figures=4,
-        beta_opt_deg=17.0,
-        thrust_fraction=0.37,
+        n_tables=1,
+        n_figures=1,
         mechanism_weight_kg=634.0,
         sfc_cruise_penalty_pct=0.66,
         stage_dir=tmp_path,
@@ -200,20 +198,12 @@ class TestStage5ResultValidation:
 
 class TestStage6ResultValidation:
 
-    def test_passes_with_valid_reverse_thrust(self, tmp_path: Path) -> None:
+    def test_passes_with_valid_mechanism_weight(self, tmp_path: Path) -> None:
         _valid_s6(tmp_path).validate()
 
-    def test_raises_when_fewer_than_4_tables(self, tmp_path: Path) -> None:
+    def test_raises_when_no_tables(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="tables"):
-            _valid_s6(tmp_path, n_tables=3).validate()
-
-    def test_raises_when_thrust_fraction_zero(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="thrust_fraction"):
-            _valid_s6(tmp_path, thrust_fraction=0.0).validate()
-
-    def test_raises_when_thrust_fraction_above_one(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError, match="thrust_fraction"):
-            _valid_s6(tmp_path, thrust_fraction=1.0).validate()
+            _valid_s6(tmp_path, n_tables=0).validate()
 
     def test_raises_when_mechanism_weight_zero(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="mechanism_weight"):
@@ -226,10 +216,8 @@ class TestStage6ResultValidation:
         s6 = Stage6Result(
             tables_dir=tables_dir,
             figures_dir=figures_dir,
-            n_tables=4,
-            n_figures=4,
-            beta_opt_deg=17.0,
-            thrust_fraction=0.37,
+            n_tables=1,
+            n_figures=1,
             mechanism_weight_kg=634.0,
             sfc_cruise_penalty_pct=0.66,
             stage_dir=tmp_path,
@@ -243,20 +231,14 @@ class TestStage6ResultValidation:
         s6 = Stage6Result(
             tables_dir=tables_dir,
             figures_dir=tmp_path / "missing_figures",
-            n_tables=4,
-            n_figures=4,
-            beta_opt_deg=17.0,
-            thrust_fraction=0.37,
+            n_tables=1,
+            n_figures=1,
             mechanism_weight_kg=634.0,
             sfc_cruise_penalty_pct=0.66,
             stage_dir=tmp_path,
         )
         with pytest.raises((ValueError, FileNotFoundError)):
             s6.validate()
-
-    @pytest.mark.parametrize("thrust_frac", [0.20, 0.40, 0.60, 0.99])
-    def test_accepts_thrust_fraction_in_range(self, tmp_path: Path, thrust_frac: float) -> None:
-        _valid_s6(tmp_path, thrust_fraction=thrust_frac).validate()
 
 
 # ---------------------------------------------------------------------------

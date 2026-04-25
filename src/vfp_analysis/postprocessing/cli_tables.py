@@ -90,8 +90,7 @@ def build_summary_table(
     table.add_row("5", "Pitch & Kinematics",
                   f"twist={s5.twist_total_deg:.1f}° | max_loss={s5.max_off_design_loss_pct:.1f}%")
     table.add_row("6", "Reverse Thrust",
-                  f"β_opt={s6.beta_opt_deg:.1f}° | T_rev={s6.thrust_fraction * 100:.1f}% | "
-                  f"Δmass={s6.mechanism_weight_kg:.0f}kg | ΔSFC=+{s6.sfc_cruise_penalty_pct:.3f}%")
+                  f"mechanism={s6.mechanism_weight_kg:.0f}kg | ΔSFC=+{s6.sfc_cruise_penalty_pct:.3f}% (theoretical)")
     table.add_row("7", "SFC Analysis",
                   f"[bold bright_green]Mean SFC reduction: {s7.mean_sfc_reduction_pct:.2f}%"
                   f"[/bold bright_green]")

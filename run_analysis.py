@@ -191,7 +191,7 @@ def _stage_block(step: int, title: str, emoji: str = "⚙") -> Generator[None, N
 
 def step_1_clean_results() -> None:
     """Delete results from previous runs."""
-    with _stage_block(1, "Cleaning previous results", "🗑"):
+    with _stage_block(1, "Cleaning previous results", "[DEL]"):
         dirs_to_clean = sorted(base_config.STAGE_DIR_NAMES)
         with Progress(
             SpinnerColumn(style="yellow"),
@@ -218,7 +218,7 @@ def step_1_clean_results() -> None:
 
 def step_2_airfoil_selection() -> Stage1Result:
     """Stage 1: Automatic airfoil selection."""
-    with _stage_block(2, "Airfoil Selection (Stage 1)", "✈"):
+    with _stage_block(2, "Airfoil Selection (Stage 1)", "[VPF]"):
         cfg = get_settings()
         stage1_dir = base_config.get_stage_dir(1)
         stage1_dir.mkdir(parents=True, exist_ok=True)
@@ -391,6 +391,7 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
         # Post-processing (pitch map, plots, organize polars)
         console.print("    [vpf.info]Post-processing: pitch maps…[/vpf.info]")
 
+        source_polars = stage2_dir / "simulation_plots"
         pitch_map_dir = stage2_dir / "pitch_map"
         pitch_map_dir.mkdir(parents=True, exist_ok=True)
         plot_alpha_opt_evolution(alpha_eff_map, configs, pitch_map_dir)
@@ -515,7 +516,7 @@ def step_4_compressibility_correction(s2: Stage2Result) -> Stage3Result:
 
 def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
     """Stage 4: Aerodynamic metrics + publication figures."""
-    with _stage_block(5, "Performance Metrics & Figures (Stage 4)", "📊"):
+    with _stage_block(5, "Performance Metrics & Figures (Stage 4)", "[FIG]"):
         cfg = get_settings()
         stage2_dir = base_config.get_stage_dir(2)
         polars_dir = s3.corrected_dir if s3.corrected_dir.exists() else stage2_dir / "simulation_plots"
@@ -586,7 +587,7 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
 
 def step_6_pitch_kinematics() -> Stage5Result:
     """Stage 5: Full pitch, incidence and kinematics analysis (3D)."""
-    with _stage_block(6, "Pitch & Kinematics Analysis (Stage 5)", "🔄"):
+    with _stage_block(6, "Pitch & Kinematics Analysis (Stage 5)", "[ROT]"):
         with console.status("[cyan]Running 3D pitch/kinematics model…", spinner="dots12"):
             run_pitch_kinematics()
 
@@ -636,9 +637,9 @@ def step_6_pitch_kinematics() -> Stage5Result:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def step_7_reverse_thrust() -> Stage6Result:
-    """Stage 6: VPF Reverse Thrust Modeling."""
-    with _stage_block(7, "Reverse Thrust Modeling (Stage 6)", "🔁"):
-        with console.status("[cyan]Modelling VPF reverse thrust…", spinner="dots12"):
+    """Stage 6: VPF Reverse Thrust — theoretical mechanism weight analysis."""
+    with _stage_block(7, "Reverse Thrust Modeling (Stage 6)", "[RT]"):
+        with console.status("[cyan]Computing VPF reverse thrust mechanism weight…", spinner="dots12"):
             run_reverse_thrust()
 
         stage6_dir  = base_config.get_stage_dir(6)
@@ -647,36 +648,23 @@ def step_7_reverse_thrust() -> Stage6Result:
         n_tables  = len(list(tables_dir.glob("*.csv")))  if tables_dir.exists()  else 0
         n_figures = len(list(figures_dir.glob("*.png"))) if figures_dir.exists() else 0
 
-        beta_opt    = float("nan")
-        thrust_frac = float("nan")
         mech_weight = float("nan")
         sfc_penalty = float("nan")
 
         import pandas as _pd
-
-        opt_file = tables_dir / "reverse_thrust_optimal.csv"
-        if opt_file.exists():
-            df_opt = _pd.read_csv(opt_file).set_index("metric")["value"]
-            beta_opt    = float(df_opt.get("beta_opt_mid_deg",   float("nan")))
-            thrust_frac = float(df_opt.get("thrust_fraction_pct", float("nan"))) / 100.0
-
         mw_file = tables_dir / "mechanism_weight.csv"
         if mw_file.exists():
             df_mw = _pd.read_csv(mw_file).set_index("metric")["value"]
             mech_weight = float(df_mw.get("mechanism_weight_kg",    float("nan")))
             sfc_penalty = float(df_mw.get("sfc_cruise_penalty_pct", float("nan")))
 
-        console.print(f"    [vpf.ok]→[/vpf.ok]  β_opt={beta_opt:.1f}° | "
-                      f"T_rev={thrust_frac * 100:.1f}% fwd | "
-                      f"mechanism={mech_weight:.0f} kg | ΔSFC=+{sfc_penalty:.3f}%")
+        console.print(f"    [vpf.ok]→[/vpf.ok]  mechanism={mech_weight:.0f} kg | ΔSFC=+{sfc_penalty:.3f}%")
 
         s6 = Stage6Result(
             tables_dir=tables_dir,
             figures_dir=figures_dir,
             n_tables=n_tables,
             n_figures=n_figures,
-            beta_opt_deg=beta_opt,
-            thrust_fraction=thrust_frac,
             mechanism_weight_kg=mech_weight,
             sfc_cruise_penalty_pct=sfc_penalty,
             stage_dir=stage6_dir,
@@ -750,7 +738,7 @@ def main() -> None:
     console.print()
     console.print(Panel(
         Text.assemble(
-            ("  ✈  VPF Pipeline — Complete Aerodynamic Analysis  ✈  \n", "bold bright_cyan"),
+            ("  [VPF]  VPF Pipeline — Complete Aerodynamic Analysis  [VPF]  \n", "bold bright_cyan"),
             ("  Variable Pitch Fan · Aerodynamic Performance Simulation", "dim white"),
         ),
         border_style="cyan",

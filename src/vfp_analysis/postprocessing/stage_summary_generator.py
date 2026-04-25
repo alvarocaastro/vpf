@@ -465,28 +465,17 @@ def generate_stage5_summary(stage_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def generate_stage6_summary(stage_dir: Path) -> str:
-    tables_dir  = stage_dir / "tables"
-    optimal_csv = tables_dir / "reverse_thrust_optimal.csv"
-    mw_csv      = tables_dir / "mechanism_weight.csv"
+    tables_dir = stage_dir / "tables"
+    mw_csv     = tables_dir / "mechanism_weight.csv"
 
-    lines = _header(6, "VPF REVERSE THRUST MODELING")
+    lines = _header(6, "VPF REVERSE THRUST — THEORETICAL ANALYSIS")
     lines += [
-        "BEM modelling of reverse thrust with blade at negative pitch.",
-        "dT/dr = Z·0.5ρW²c·(CL sinφ − CD cosφ)  per blade section.",
+        "Variable-pitch fan reverse thrust concept: blades rotate to negative pitch",
+        "angles during rollout, redirecting airflow without cascade doors.",
+        "Full BEM analysis requires extended polars (alpha < -12 deg); this section",
+        "quantifies the pitch mechanism weight and cruise SFC impact.",
         "",
     ]
-
-    if optimal_csv.exists():
-        try:
-            idx = pd.read_csv(optimal_csv).set_index("metric")["value"]
-            lines += [
-                f"delta_beta_opt       : {float(idx.get('delta_beta_opt_deg', float('nan'))):.1f} deg",
-                f"Reverse thrust       : {abs(float(idx.get('thrust_net_kN', float('nan')))):.1f} kN"
-                f"  ({float(idx.get('thrust_fraction_pct', float('nan'))):.1f}% of fwd thrust)",
-                f"Fan efficiency rev.  : {float(idx.get('eta_fan_rev', float('nan'))):.3f}",
-            ]
-        except Exception:
-            pass
 
     if mw_csv.exists():
         try:
@@ -495,13 +484,14 @@ def generate_stage6_summary(stage_dir: Path) -> str:
                 f"VPF mechanism weight : {float(idx.get('mechanism_weight_kg', float('nan'))):.0f} kg (both engines)",
                 f"Saving vs cascade rev: {float(idx.get('weight_saving_vs_conventional_kg', float('nan'))):.0f} kg",
                 f"Cruise SFC penalty   : +{float(idx.get('sfc_cruise_penalty_pct', float('nan'))):.3f}%",
+                f"SFC benefit vs casc. : -{float(idx.get('sfc_benefit_vs_conventional_pct', float('nan'))):.3f}%",
             ]
         except Exception:
             pass
 
     lines += [
         "",
-        "Outputs: reverse_kinematics, reverse_thrust_sweep, reverse_thrust_optimal, mechanism_weight.",
+        "Outputs: mechanism_weight.csv, mechanism_weight_comparison.png.",
     ]
     lines += _footer()
     return "\n".join(lines)
