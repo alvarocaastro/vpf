@@ -15,8 +15,8 @@ class PhysicsConstants:
     """Empirical coefficients and physical limits for the VPF aerodynamic pipeline."""
 
     # Optimal incidence detection (second CL/CD peak)
-    ALPHA_MIN_OPT_DEG: float = 1.0
-    """Minimum angle for optimal peak search [°]."""
+    ALPHA_MIN_OPT_DEG: float = 3.0
+    """Minimum angle for second-peak search [°]. Below ~3° XFOIL shows a laminar-bubble artefact peak."""
 
     CL_MIN_3D: float = 0.30
     """Minimum CL for a point to be considered operational in 3D polars."""
