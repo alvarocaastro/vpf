@@ -1,9 +1,8 @@
 """Stage 3 service: compressibility corrections for aerodynamic polars.
 
-Reads raw XFOIL polars from Stage 2 (results/stage2_xfoil_simulations/polars/),
-applies Prandtl-Glauert and Kármán-Tsien corrections, and writes corrected CSVs
-to results/stage3_compressibility_correction/polars/ with a canonical ``ld_corrected``
-column (Kármán-Tsien efficiency, wave drag included via Lock's law).
+Reads raw XFOIL polars from Stage 2, applies Prandtl-Glauert and Kármán-Tsien
+corrections, and writes corrected CSVs to stage3 with a canonical
+``ld_corrected`` column (KT efficiency, wave drag via Lock's law).
 """
 
 from __future__ import annotations
@@ -62,10 +61,7 @@ class CompressibilityCorrectionService:
 
         df_original = pd.read_csv(input_polar_path)
 
-        # Step 1: Prandtl-Glauert correction (adds cl_pg, ld_pg, cd_corrected, mach_target)
         df_pg = self._pg.correct_polar(df_original, case)
-
-        # Step 2: Kármán-Tsien correction (adds cl_kt, ld_kt; updates cd_corrected with wave drag)
         df_corrected = self._kt.correct_polar(df_pg, case)
 
         output_dir = self._base_output / case.flight_condition.lower()
@@ -73,17 +69,22 @@ class CompressibilityCorrectionService:
             output_dir = output_dir / section
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Single CSV with all correction data
         polar_path = output_dir / "corrected_polar.csv"
-        export_cols = ["alpha", "cl", "cl_pg", "cl_kt",
-                       "cd", "cd_corrected", "ld_pg", "ld_kt",
-                       "mach_target", "re", "ncrit", "cm", "cm_pg", "cm_kt"]
+        export_cols = [
+            "alpha", "cl", "cl_pg", "cl_kt",
+            "cd", "cd_corrected", "cd_wave_extrapolated",
+            "ld_pg", "ld_kt",
+            "mach_target", "re", "ncrit", "cm", "cm_pg", "cm_kt",
+        ]
         export_cols = [c for c in export_cols if c in df_corrected.columns]
         out_df = df_corrected[export_cols].rename(columns={"ld_kt": "ld_corrected"})
         out_df.to_csv(polar_path, index=False, float_format="%.6f")
 
         plot_path = output_dir / "corrected_plots.png"
-        self._plot_comparison(df_original, df_corrected, case, section, plot_path)
+        self._plot_comparison(
+            df_original, df_corrected, case, section, plot_path,
+            self._kt._tc, self._kt._kappa,
+        )
 
         case_name = f"{case.flight_condition}_{section}" if section else case.flight_condition
         return CorrectionResult(
@@ -91,7 +92,7 @@ class CompressibilityCorrectionService:
             section=section,
             output_dir=output_dir,
             corrected_polar_path=polar_path,
-            corrected_cl_alpha_path=polar_path,      # kept for interface compatibility
+            corrected_cl_alpha_path=polar_path,
             corrected_efficiency_path=polar_path,
             corrected_plot_path=plot_path,
         )
@@ -103,32 +104,24 @@ class CompressibilityCorrectionService:
         case: CompressibilityCase,
         section: Optional[str],
         output_path: Path,
+        thickness_ratio: float = 0.10,
+        korn_kappa: float = 0.87,
     ) -> None:
-        """
-        Plot CL(α) and CL/CD(α) showing three curves:
-          - Original XFOIL at M_ref (grey dashed)
-          - Prandtl-Glauert at M_target (colour dashed)
-          - Kármán-Tsien at M_target (colour solid)
-        with Mcr annotated.
-        """
         flight = case.flight_condition.lower()
-        color  = COLORS.get(flight, "#4477AA")
+        color = COLORS.get(flight, "#4477AA")
         flight_label = FLIGHT_LABELS.get(flight, flight.capitalize())
         section_label = SECTION_LABELS.get(section or "", section or "")
 
-        # Estimate Mcr from median operating CL (alpha 3-10°)
         df_op = df_original[(df_original["alpha"] >= 3) & (df_original["alpha"] <= 10)]
         cl_op = float(df_op["cl"].median()) if not df_op.empty else 0.6
-        mcr = estimate_mcr(cl_op)
+        mcr = estimate_mcr(cl_op, thickness_ratio, korn_kappa)
         is_supercritical = case.target_mach > mcr
 
         with apply_style():
             fig, (ax_cl, ax_eff) = plt.subplots(2, 1, figsize=(6.5, 8.0),
                                                   gridspec_kw={"hspace": 0.35})
-
             alpha = df_original["alpha"]
 
-            # ── CL vs α ──────────────────────────────────────────────────────
             ax_cl.plot(alpha, df_original["cl"],
                        color="#BBBBBB", linewidth=1.4, linestyle="--",
                        label=f"XFOIL  M = {case.reference_mach:.2f}")
@@ -139,10 +132,8 @@ class CompressibilityCorrectionService:
                        color=color, linewidth=2.2,
                        label=f"Kármán-Tsien  M = {case.target_mach:.2f}")
 
-            # Mcr annotation
             mcr_label = (f"$M_{{cr}}$ ≈ {mcr:.3f}"
                          + ("  ⚠ supercritical" if is_supercritical else ""))
-            ax_cl.axvline(0, color="none")  # placeholder
             ax_cl.annotate(
                 mcr_label,
                 xy=(0.97, 0.05), xycoords="axes fraction",
@@ -152,15 +143,11 @@ class CompressibilityCorrectionService:
                           facecolor="#FFEBEE" if is_supercritical else "#E8F5E9",
                           edgecolor="none", alpha=0.9),
             )
-
             ax_cl.set_xlabel(r"$\alpha$ [°]")
             ax_cl.set_ylabel(r"$C_L$")
-            ax_cl.set_title(
-                f"Compressibility correction — {flight_label} / {section_label}"
-            )
+            ax_cl.set_title(f"Compressibility correction — {flight_label} / {section_label}")
             ax_cl.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
-            # ── CL/CD vs α ───────────────────────────────────────────────────
             ld_orig = df_original["cl"] / df_original["cd"]
             ax_eff.plot(alpha, ld_orig,
                         color="#BBBBBB", linewidth=1.4, linestyle="--",
@@ -171,13 +158,12 @@ class CompressibilityCorrectionService:
             ax_eff.plot(alpha, df_corrected["ld_kt"],
                         color=color, linewidth=2.2,
                         label=f"Kármán-Tsien  M = {case.target_mach:.2f}")
-
             ax_eff.set_xlabel(r"$\alpha$ [°]")
             ax_eff.set_ylabel(r"$C_L / C_D$")
             ax_eff.set_title(r"$C_L/C_D$ vs $\alpha$")
             ax_eff.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
 
-            fig.savefig(output_path, bbox_inches="tight")
+            fig.savefig(output_path)
             plt.close(fig)
 
     @staticmethod
@@ -186,15 +172,11 @@ class CompressibilityCorrectionService:
         flight_conditions: list[str],
         sections: list[str],
     ) -> None:
-        """
-        For each blade section, plot CL(α) and CL/CD(α) for all flight conditions
-        using the K-T corrected data — one PNG per section saved at base_output_dir level.
-        """
+        """For each blade section plot CL and CL/CD for all flight conditions (K-T corrected)."""
         for section in sections:
             with apply_style():
                 fig, (ax_cl, ax_eff) = plt.subplots(2, 1, figsize=(7.0, 8.5),
                                                       gridspec_kw={"hspace": 0.38})
-
                 section_label = SECTION_LABELS.get(section, section)
                 has_data = False
 
@@ -204,7 +186,7 @@ class CompressibilityCorrectionService:
                         continue
 
                     df = pd.read_csv(polar_path)
-                    if "cl_kt" not in df.columns or "ld_kt" not in df.columns:
+                    if "cl_kt" not in df.columns or "ld_corrected" not in df.columns:
                         continue
 
                     color = COLORS.get(flight.lower(), "#4477AA")
@@ -214,7 +196,7 @@ class CompressibilityCorrectionService:
                     ax_cl.plot(df["alpha"], df["cl_kt"],
                                color=color, linewidth=2.0,
                                label=f"{flight_label}  M = {mach:.2f}")
-                    ax_eff.plot(df["alpha"], df["ld_kt"],
+                    ax_eff.plot(df["alpha"], df["ld_corrected"],
                                 color=color, linewidth=2.0,
                                 label=f"{flight_label}  M = {mach:.2f}")
                     has_data = True
@@ -235,6 +217,5 @@ class CompressibilityCorrectionService:
 
                 figures_dir = base_output_dir / "figures"
                 figures_dir.mkdir(parents=True, exist_ok=True)
-                out_path = figures_dir / f"correction_comparison_{section}.png"
-                fig.savefig(out_path, bbox_inches="tight")
+                fig.savefig(figures_dir / f"correction_comparison_{section}.png")
                 plt.close(fig)

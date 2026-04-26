@@ -1,31 +1,22 @@
-"""
-Kármán–Tsien compressibility correction model.
+"""Kármán–Tsien compressibility correction model.
 
-The Kármán–Tsien rule is a higher-order (non-linear) correction that accounts
-for the variation of Mach number through the flow field.  It is more accurate
-than Prandtl-Glauert for Mach numbers above ~0.5, where the linear PG theory
-begins to over-predict the compressibility effect.
-
-Correction applied to the pressure coefficient:
+The Kármán–Tsien rule is a higher-order (non-linear) correction more accurate
+than Prandtl-Glauert above M ≈ 0.5.  Correction applied to the pressure
+coefficient:
 
     Cp_KT = Cp_0 / (β + M²/(2(1+β)) × Cp_0)
 
-where β = sqrt(1 - M²) and Cp_0 is the incompressible pressure coefficient.
+For bulk lift-polar correction (thin-airfoil, Cp ≈ −CL/n) this gives a
+point-wise CL correction.  Cm is scaled by the same CL correction factor
+(both arise from the pressure distribution; applying the KT denominator to
+Cm directly has no physical basis).
 
-For bulk lift-polar correction (thin-airfoil approximation Cp ≈ -CL/n),
-this translates to a point-wise correction on each CL value:
-
-    CL_KT(α) = CL_0(α) / (β_target + M²_target/(2(1+β_target)) × CL_0(α))
-               × [β_ref + M²_ref/(2(1+β_ref)) × CL_0(α)]
-
-The second factor normalises to the reference Mach (M=0.2), ensuring both
-models start from the same XFOIL baseline.
+Wave drag above Mdd uses Lock's 4th-power law.  Points computed with
+M_target > 0.90 are flagged as extrapolated in ``cd_wave_extrapolated``.
 
 References:
-    von Kármán, T. (1941). "Compressibility Effects in Aerodynamics."
-    J. Aeronautical Sciences, 8(9), 337-356.
-    Tsien, H.S. (1939). "Two-dimensional subsonic flow of compressible fluids."
-    J. Aeronautical Sciences, 6(10), 399-407.
+    von Kármán, T. (1941). J. Aeronautical Sciences, 8(9), 337-356.
+    Tsien, H.S. (1939). J. Aeronautical Sciences, 6(10), 399-407.
 """
 
 from __future__ import annotations
@@ -39,49 +30,32 @@ from vpf_analysis.stage3_compressibility_correction.compressibility_case import 
     CompressibilityCase,
 )
 from vpf_analysis.stage3_compressibility_correction.critical_mach import (
-    wave_drag_increment,
     estimate_mdd,
+    wave_drag_increment,
 )
 
 LOGGER = logging.getLogger(__name__)
 
+_MACH_WAVE_DRAG_VALID_MAX = 0.90
+
 
 class KarmanTsienModel:
-    """
-    Kármán–Tsien compressibility correction.
-
-    Applies a non-linear correction to each CL value in the polar, accounting
-    for the Mach-number dependence of the local pressure distribution.
-    Also applies wave-drag correction to CD via Lock's 4th-power law.
-    """
+    """Kármán–Tsien compressibility correction with Lock wave-drag."""
 
     def __init__(self, thickness_ratio: float = 0.10, korn_kappa: float = 0.87) -> None:
-        self._tc    = thickness_ratio
+        self._tc = thickness_ratio
         self._kappa = korn_kappa
 
     @staticmethod
     def _kt_denominator(cl: float, mach: float) -> float:
-        """Kármán–Tsien denominator for a given CL and Mach."""
         beta = math.sqrt(1.0 - mach * mach)
         return beta + (mach * mach / (2.0 * (1.0 + beta))) * cl
 
     def correct_polar(self, df: pd.DataFrame, case: CompressibilityCase) -> pd.DataFrame:
-        """
-        Apply Kármán–Tsien correction to polar data.
+        """Apply Kármán–Tsien correction to polar data.
 
-        Adds columns cl_kt and ld_kt to the DataFrame (alongside the existing
-        cl_pg / ld_pg columns from PrandtlGlauertModel).
-
-        Parameters
-        ----------
-        df : pd.DataFrame
-            DataFrame already containing cl_pg from PrandtlGlauertModel.
-        case : CompressibilityCase
-
-        Returns
-        -------
-        pd.DataFrame
-            df with additional columns cl_kt, ld_kt, cd_corrected.
+        Adds cl_kt, ld_kt, cm_kt (if cm present), cd_corrected, and
+        cd_wave_extrapolated to the DataFrame.
         """
         from vpf_analysis.settings import get_settings
         kt_max = get_settings().physics.MACH_KT_VALID_MAX
@@ -99,19 +73,17 @@ class KarmanTsienModel:
                 m_tgt, kt_max,
             )
 
-        cl_kt = []
+        # ── CL correction ────────────────────────────────────────────────────
+        cl_kt: list[float] = []
         for i, cl in enumerate(cl_0):
             if not kt_valid:
-                # Use PG value when available, else recompute from cl_0
-                if "cl_pg" in df.columns:
-                    cl_kt.append(float(df["cl_pg"].iloc[i]))
-                else:
-                    beta = math.sqrt(max(1.0 - m_tgt * m_tgt, 1e-9))
-                    cl_kt.append(cl / beta)
+                cl_kt.append(
+                    float(df["cl_pg"].iloc[i]) if "cl_pg" in df.columns
+                    else cl / math.sqrt(max(1.0 - m_tgt * m_tgt, 1e-9))
+                )
                 continue
             denom_tgt = self._kt_denominator(cl, m_tgt)
             denom_ref = self._kt_denominator(cl, m_ref)
-            # Avoid division by zero near stall (large negative CL or near-zero denominator)
             if abs(denom_tgt) < 1e-6 or abs(denom_ref) < 1e-6:
                 cl_kt.append(float("nan"))
             else:
@@ -119,34 +91,40 @@ class KarmanTsienModel:
 
         df_out["cl_kt"] = cl_kt
 
-        # Kármán-Tsien correction for pitching moment (same non-linear rule as CL)
+        # ── Cm correction — scale by the same CL factor ──────────────────────
+        # Applying the KT denominator to cm directly has no physical basis; both
+        # CL and Cm arise from the pressure distribution, so they share the factor.
         if "cm" in df.columns:
-            cm_kt = []
-            for cm in df["cm"].values:
-                denom_tgt = self._kt_denominator(cm, m_tgt)
-                denom_ref = self._kt_denominator(cm, m_ref)
-                if abs(denom_tgt) < 1e-6 or abs(denom_ref) < 1e-6:
+            cm_kt: list[float] = []
+            for cm, cl, cl_c in zip(df["cm"].values, cl_0, cl_kt):
+                if abs(cl) < 1e-9 or cl_c != cl_c:  # guard zero-CL and nan
                     cm_kt.append(float("nan"))
                 else:
-                    cm_kt.append(cm * denom_ref / denom_tgt)
+                    cm_kt.append(cm * cl_c / cl)
             df_out["cm_kt"] = cm_kt
 
-        # Wave drag: Lock's 4th-power law applied per-alpha using CL at that alpha
-        cd_corrected = []
+        # ── Wave drag ────────────────────────────────────────────────────────
+        if m_tgt > _MACH_WAVE_DRAG_VALID_MAX:
+            LOGGER.warning(
+                "M_target=%.3f > %.2f: Lock's law is extrapolated. "
+                "cd_wave_extrapolated flag set in output.",
+                m_tgt, _MACH_WAVE_DRAG_VALID_MAX,
+            )
+
+        cd_corrected: list[float] = []
         for cl, cd in zip(cl_0, df["cd"].values):
             mdd = estimate_mdd(max(cl, 0.0), self._tc, self._kappa)
-            delta_cd = wave_drag_increment(m_tgt, mdd)
-            cd_corrected.append(cd + delta_cd)
+            cd_corrected.append(cd + wave_drag_increment(m_tgt, mdd))
 
         df_out["cd_corrected"] = cd_corrected
+        df_out["cd_wave_extrapolated"] = m_tgt > _MACH_WAVE_DRAG_VALID_MAX
 
-        # Recompute efficiencies using K-T CL and corrected CD
+        # ── Efficiencies ─────────────────────────────────────────────────────
         df_out["ld_kt"] = [
             cl / cd if (cd > 0 and cl == cl) else float("nan")
             for cl, cd in zip(df_out["cl_kt"], df_out["cd_corrected"])
         ]
 
-        # Also recompute PG efficiency with corrected CD (consistent comparison)
         if "cl_pg" in df_out.columns:
             df_out["ld_pg"] = [
                 cl / cd if (cd > 0 and cl == cl) else float("nan")
