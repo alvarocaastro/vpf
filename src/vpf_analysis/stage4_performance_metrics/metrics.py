@@ -27,12 +27,8 @@ from vpf_analysis.postprocessing.aerodynamics_utils import (
 LOGGER = logging.getLogger(__name__)
 
 # Minimum CL for viable fan blade operation.
-# Below this value the blade generates insufficient thrust regardless of CL/CD.
-# Set conservatively at 0.50 to allow detection of the true CL/CD optimum across all
-# flight conditions, including climb where CL_opt ≈ 0.5–0.65.  The previous value of
-# 0.70 risked discarding the actual aerodynamic optimum in low-loading conditions.
-# Ref: Cumpsty (2004) ch. 8 — fan blade CL design range 0.4–1.0.
-CL_MIN_VIABLE = 0.50
+from vpf_analysis.settings import get_settings as _get_settings
+CL_MIN_VIABLE: float = _get_settings().physics.CL_MIN_VIABLE
 
 
 @dataclass(frozen=True)

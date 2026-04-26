@@ -1262,8 +1262,8 @@ def run_pitch_kinematics() -> None:
         f"– {_cr_by_sec['root'].delta_carter_deg:.2f}° (root)",
         "",
         f"[B] Rotational corrections (Snel):",
-        f"    Root (c/r)² = {_cr_by_sec['root'].chord_m / _cr_by_sec['root'].radius_m:.3f}² → "
-        f"CL gain ≈ +{3.0 * (_cr_by_sec['root'].chord_m / _cr_by_sec['root'].radius_m)**2 * 100:.1f}%",
+        f"    Root (c/r)² = {_cr_by_sec['root'].c_over_r:.3f}² → "
+        f"CL gain ≈ +{3.0 * _cr_by_sec['root'].c_over_r**2 * 100:.1f}%",
         "",
         f"[C] Blade twist design:",
         f"    Total twist: {twist_total:.1f}°  (root − tip)",

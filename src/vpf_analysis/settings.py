@@ -218,7 +218,7 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
     bg = raw["blade_geometry"]
     blade = BladeGeometry(
         num_blades=int(bg["num_blades"]),
-        chord_m={k: float(v) for k, v in bg["chord"].items()},
+        solidity={k: float(v) for k, v in bg["solidity"].items()},
         theta_camber_deg=float(bg["theta_camber_deg"]),
     )
 

@@ -117,10 +117,14 @@ fan_geometry:
 # Chords derived from Re = rho*W_rel*c/mu at cruise (FL350), consistent with Re table above
 blade_geometry:
   num_blades: 16          # Number of fan blades Z — GE9X: 16 wide-chord composite
-  chord:                  # Blade chord c [m] per section
-    # Re_cruise = rho*W_rel*c/mu → c = Re*mu/(rho*W_rel) at FL350
-    root: 0.36            # Re=1.8e6, W_rel=194 m/s → c=0.361 m → σ=1.73
-    mid_span: 0.46        # Re=3.2e6, W_rel=274 m/s → c=0.456 m → σ=1.17
-    tip: 0.46             # Re=5.0e6, W_rel=421 m/s → c=0.463 m → σ=0.69
-  theta_camber_deg: 8.0   # Camber angle θ [°] — NACA 65-410 representative value
+  solidity:               # σ = c·Z / (2π·r) — non-dimensional cascade parameter
+    # Derived from Re_cruise geometry (c = Re·μ / (ρ·W_rel) at FL350):
+    #   root:     c=0.361 m, r=0.53 m → σ = 0.361·16/(2π·0.53) = 1.73
+    #   mid_span: c=0.456 m, r=1.00 m → σ = 0.456·16/(2π·1.00) = 1.16
+    #   tip:      c=0.463 m, r=1.70 m → σ = 0.463·16/(2π·1.70) = 0.69
+    # Recovery: c [m] = σ · 2π · r / Z  (used only where absolute chord is needed)
+    root:     1.73
+    mid_span: 1.16
+    tip:      0.69
+  theta_camber_deg: 8.0   # Camber angle θ [°] — NACA 65-410
                           # (Carter's rule: m=0.23 for NACA 6-series, a/c=0.5)

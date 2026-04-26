@@ -83,15 +83,15 @@ def compute_cascade_corrections(
 ) -> List[CascadeResult]:
     """Compute cascade corrections for each blade section."""
     Z = blade_geometry["num_blades"]
-    chords: Dict[str, float] = blade_geometry["chord"]
+    solidities: Dict[str, float] = blade_geometry["solidity"]
     theta = blade_geometry["theta_camber_deg"]
     radii = get_blade_radii()
 
     results: List[CascadeResult] = []
     for section, r in radii.items():
-        c = chords.get(section, 0.10)
-        s = 2.0 * math.pi * r / Z
-        sigma = c / s
+        sigma = solidities.get(section, 1.0)
+        s = 2.0 * math.pi * r / Z          # blade spacing [m]
+        c = sigma * s                        # chord recovered for output only
 
         k_w = _weinig_factor(sigma)
         delta_c = _carter_deviation(theta, sigma)
@@ -218,7 +218,8 @@ def compute_rotational_corrections(
     cl_cd_max_2d_map: Dict[tuple, float],
 ) -> List[RotationalCorrectionResult]:
     """Compute Snel 3D corrections for each (condition, section)."""
-    chords: Dict[str, float] = blade_geometry["chord"]
+    Z = blade_geometry["num_blades"]
+    solidities: Dict[str, float] = blade_geometry["solidity"]
     radii = get_blade_radii()
 
     if "cl_cascade" in df_polars.columns:
@@ -235,8 +236,10 @@ def compute_rotational_corrections(
     for condition in conditions:
         for section in sections:
             r = radii.get(section, float("nan"))
-            c = chords.get(section, 0.10)
-            c_over_r = c / r if r > 0 else 0.0
+            sigma = solidities.get(section, 1.0)
+            # c/r = σ·2π/Z  (independent of r — pure non-dimensional relation)
+            c_over_r = sigma * 2.0 * math.pi / Z if Z > 0 else 0.0
+            c = c_over_r * r                   # chord in metres (for output only)
             snel_factor = _SNEL_A * c_over_r ** 2
 
             mask = (df_polars["condition"] == condition) & (df_polars["section"] == section)
@@ -318,7 +321,8 @@ def compute_rotational_corrections_du_selig(
     """Compute Du-Selig 3D corrections for each (condition, section)."""
     from vpf_analysis.config_loader import get_axial_velocities, get_blade_radii, get_fan_rpm
 
-    chords: Dict[str, float] = blade_geometry["chord"]
+    Z = blade_geometry["num_blades"]
+    solidities: Dict[str, float] = blade_geometry["solidity"]
     radii = get_blade_radii()
     va_map = get_axial_velocities()
     rpm = get_fan_rpm()
@@ -339,8 +343,9 @@ def compute_rotational_corrections_du_selig(
         va = va_map.get(condition, 150.0)
         for section in sections:
             r = radii.get(section, float("nan"))
-            c = chords.get(section, 0.10)
-            c_over_r = c / r if r > 0 else 0.0
+            sigma = solidities.get(section, 1.0)
+            c_over_r = sigma * 2.0 * math.pi / Z if Z > 0 else 0.0
+            c = c_over_r * r
             u = omega * r
             lambda_r = u / va if va > 0 else 0.0
 
@@ -396,7 +401,8 @@ def build_3d_polar_map(
     blade_geometry: dict,
 ) -> Dict[tuple, pd.DataFrame]:
     """Build a map of Snel-corrected 3D polars: {(condition, section): DataFrame}."""
-    chords = blade_geometry["chord"]
+    Z = blade_geometry["num_blades"]
+    solidities = blade_geometry["solidity"]
     radii = get_blade_radii()
     if "cl_cascade" in df_polars.columns:
         cl_col = "cl_cascade"
@@ -408,8 +414,8 @@ def build_3d_polar_map(
     polar_map: Dict[tuple, pd.DataFrame] = {}
     for condition in df_polars["condition"].unique():
         for section, r in radii.items():
-            c = chords.get(section, 0.10)
-            c_over_r = c / r if r > 0 else 0.0
+            sigma = solidities.get(section, 1.0)
+            c_over_r = sigma * 2.0 * math.pi / Z if Z > 0 else 0.0
             mask = (df_polars["condition"] == condition) & (df_polars["section"] == section)
             df_sub = df_polars[mask].sort_values("alpha").reset_index(drop=True)
             if df_sub.empty:

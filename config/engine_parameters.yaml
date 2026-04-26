@@ -3,8 +3,8 @@
 
 # ── Baseline engine performance ──────────────────────────────────────────────
 
-# Cruise SFC [lb/(lbf·h)] — GE9X public value ~0.49–0.50
-baseline_sfc: 0.50
+# Cruise SFC [lb/(lbf·h)] — GE9X-105B1A public value (matches GE9X_PARAMS in engine_data.py)
+baseline_sfc: 0.49
 
 # Baseline fan adiabatic efficiency — GE9X: ~0.90–0.92 (16-blade wide-chord)
 fan_efficiency: 0.90

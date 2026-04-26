@@ -21,6 +21,13 @@ class PhysicsConstants:
     CL_MIN_3D: float = 0.30
     """Minimum CL for a point to be considered operational in 3D polars."""
 
+    CL_MIN_VIABLE: float = 0.50
+    """Minimum CL for a fan blade to be considered aerodynamically viable.
+    Conservative lower bound allowing detection of the true CL/CD optimum in
+    low-loading conditions (climb CL_opt ≈ 0.5–0.65).
+    Ref: Cumpsty (2004) ch. 8 — fan blade CL design range 0.4–1.0.
+    """
+
     # Cascade corrections
     CARTER_M_NACA6: float = 0.23
     """Carter's rule m coefficient for NACA 6-series (a/c = 0.5)."""
@@ -82,9 +89,14 @@ class FanGeometry:
 
 @dataclass
 class BladeGeometry:
-    """Blade geometry for cascade and rotational corrections."""
+    """Blade geometry for cascade and rotational corrections.
+
+    ``solidity`` is the primary input (σ = c·Z/2πr).  Actual chord in metres
+    can be recovered as  c = σ · 2π · r / Z  when a dimensional value is needed
+    (e.g. BEM thrust integration in Stage 6).
+    """
     num_blades: int
-    chord_m: Dict[str, float]
+    solidity: Dict[str, float]
     theta_camber_deg: float
 
 
@@ -126,7 +138,7 @@ class PipelineSettings:
         rpm=2200.0, omega_rad_s=230.4, radii_m={}, axial_velocity_m_s={},
     ))
     blade: BladeGeometry = field(default_factory=lambda: BladeGeometry(
-        num_blades=16, chord_m={}, theta_camber_deg=8.0,
+        num_blades=16, solidity={}, theta_camber_deg=8.0,
     ))
     airfoil_geometry: AirfoilGeometry = field(default_factory=lambda: AirfoilGeometry(
         thickness_ratio=0.10, korn_kappa=0.87,

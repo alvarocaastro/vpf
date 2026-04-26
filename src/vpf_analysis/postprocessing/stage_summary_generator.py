@@ -17,6 +17,9 @@ from typing import Any, List
 
 import pandas as pd
 
+import yaml
+
+import vpf_analysis.settings as _base_config
 from vpf_analysis.config_loader import (
     get_alpha_range,
     get_blade_sections,
@@ -28,6 +31,16 @@ from vpf_analysis.config_loader import (
     get_selection_reynolds,
     get_target_mach,
 )
+
+
+def _tau_from_config() -> float:
+    """Read profile_efficiency_transfer (τ) from engine_parameters.yaml."""
+    try:
+        path = _base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
+        with path.open(encoding="utf-8") as f:
+            return float(yaml.safe_load(f).get("profile_efficiency_transfer", 0.50))
+    except Exception:
+        return 0.50
 
 
 def _ts() -> str:
@@ -505,7 +518,7 @@ def generate_stage7_summary(stage_dir: Path) -> str:
     lines += [
         "Estimates the SFC reduction due to VPF with optimal pitch.",
         "η_fan,new = η_base·[1 + τ·((CL/CD)_new/(CL/CD)_base − 1)]",
-        "Damping factor τ = 0.50  (3D losses: tip clearance, secondary flows).",
+        f"Damping factor τ = {_tau_from_config():.2f}  (3D losses: tip clearance, secondary flows).",
         "",
     ]
 

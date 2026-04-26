@@ -164,14 +164,16 @@ def get_blade_geometry() -> Dict[str, Any]:
 
     Returns a dict with:
         num_blades (int): number of fan blades Z
-        chord (dict[str, float]): blade chord c [m] per section
+        solidity (dict[str, float]): σ = c·Z/(2πr) per section (non-dimensional)
         theta_camber_deg (float): camber angle θ [°] for Carter's rule
+
+    Chord in metres can be recovered as  c = σ · 2π · r / Z.
     """
     cfg = load_config()
     bg = cfg["blade_geometry"]
     return {
         "num_blades": int(bg["num_blades"]),
-        "chord": {k: float(v) for k, v in bg["chord"].items()},
+        "solidity": {k: float(v) for k, v in bg["solidity"].items()},
         "theta_camber_deg": float(bg["theta_camber_deg"]),
     }
 
