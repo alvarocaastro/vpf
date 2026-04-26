@@ -68,4 +68,3 @@ data/airfoils/*_polar.txt
 # OS
 .DS_Store
 Thumbs.db
-stage_checks/
