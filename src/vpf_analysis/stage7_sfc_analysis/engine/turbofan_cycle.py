@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 
 
-def _isa_conditions(altitude_ft: float) -> tuple[float, float]:
+def _isa_conditions(altitude_ft: float) -> tuple[float, float]:  # (T0 [K], P0 [Pa])
     """Return (T0_amb [K], P0_amb [Pa]) for ISA at given altitude in feet."""
     h_m = altitude_ft * 0.3048
     if h_m <= 11_000:
@@ -28,7 +28,7 @@ def compute_turbofan_sfc(
     params: dict,
     phase: str = "cruise",
     FPR: float | None = None,
-) -> dict:
+) -> dict[str, float | str]:
     """Compute SFC for a two-stream turbofan using a simplified thermodynamic cycle.
 
     Parameters

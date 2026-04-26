@@ -1,8 +1,8 @@
-"""
-Aerodynamic performance metrics computation.
+"""Stage 4 metrics: aerodynamic performance from corrected polars.
 
-This module computes key aerodynamic metrics from simulation results,
-including maximum efficiency, optimal angle of attack, and maximum lift.
+Reads Stage 3 corrected polars, computes η_max (Cl/Cd), α_opt, Cl_max,
+and Cl at fixed-pitch α_design for each flight condition × blade section.
+Results are aggregated into summary_table.csv consumed by Stage 7 (SFC analysis).
 """
 
 from __future__ import annotations

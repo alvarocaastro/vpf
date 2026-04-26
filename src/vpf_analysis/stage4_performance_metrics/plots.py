@@ -1,4 +1,11 @@
-"""Stage 4 figures: aerodynamic efficiency and polar comparisons."""
+"""Stage 4 figures: aerodynamic efficiency and polar comparisons.
+
+Reads corrected polars from Stage 3 (results/stage3_compressibility_correction/polars/)
+and produces three essential figures per pipeline run:
+  - polar_efficiency_{flight}_{section}.png  — Cl/Cd vs α with η_max annotation
+  - lift_drag_curves_{flight}.png            — multi-section polar overlay
+  - compressibility_comparison.png           — penalty overview across conditions
+"""
 
 from __future__ import annotations
 

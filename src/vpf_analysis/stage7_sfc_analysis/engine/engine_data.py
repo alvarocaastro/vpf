@@ -54,10 +54,10 @@ def estimate_GE9X_from_similar(engines: list[dict] | None = None) -> dict:
 
 # SI ↔ Anglo conversion helpers
 def sfc_lbh_to_si(sfc_lbh: float) -> float:
-    """lb/lbf·h → kg/N·s"""
+    """Convert SFC from lb/lbf·h to kg/N·s."""
     return sfc_lbh / (3600.0 * 2.20462 / 0.224809)
 
 
 def sfc_si_to_lbh(sfc_si: float) -> float:
-    """kg/N·s → lb/lbf·h"""
+    """Convert SFC from kg/N·s to lb/lbf·h."""
     return sfc_si * (3600.0 * 2.20462 / 0.224809)

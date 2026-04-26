@@ -1,8 +1,9 @@
-"""
-Service for applying compressibility corrections to aerodynamic polars.
+"""Stage 3 service: compressibility corrections for aerodynamic polars.
 
-Applies both Prandtl-Glauert (PG) and Kármán-Tsien (K-T) corrections so that
-results can be compared.  Wave drag (Lock's law) is included via the K-T model.
+Reads raw XFOIL polars from Stage 2 (results/stage2_xfoil_simulations/polars/),
+applies Prandtl-Glauert and Kármán-Tsien corrections, and writes corrected CSVs
+to results/stage3_compressibility_correction/polars/ with a canonical ``ld_corrected``
+column (Kármán-Tsien efficiency, wave drag included via Lock's law).
 """
 
 from __future__ import annotations

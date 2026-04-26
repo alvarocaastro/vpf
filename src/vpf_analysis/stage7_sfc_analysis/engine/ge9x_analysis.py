@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from vpf_analysis.postprocessing.latex_exporter import export_table
 from vpf_analysis.shared.plot_style import apply_style
 from vpf_analysis.stage7_sfc_analysis.engine.engine_data import (
     GE9X_PARAMS,
@@ -130,25 +131,23 @@ def run_ge9x_analysis(
     df_key["SFC_lbh"] = df_key["SFC_new_kgNs"].apply(sfc_si_to_lbh)
     df_key.to_csv(tables_dir / "ge9x_sfc_improvement.csv", index=False, float_format="%.6f")
 
-    # ── LaTeX table (manual generation — no jinja2 dependency) ───────────
-    lines = [
-        r"\begin{table}[htbp]",
-        r"  \centering",
-        r"  \caption{Fuel consumption improvement as a function of aerodynamic efficiency"
-        r" $C_L/C_D$ for the GE9X-105B1A engine in takeoff phase.}",
-        r"  \label{tab:ge9x_sfc_improvement}",
-        r"  \begin{tabular}{cccc}",
-        r"    \toprule",
-        r"    $C_L/C_D$ [-] & SFC [lb/lbf$\cdot$h] & $\Delta$SFC [\%] & Fuel saving [\%] \\",
-        r"    \midrule",
-    ]
-    for _, row in df_key.iterrows():
-        lines.append(
-            f"    {row['ClCd_new']:.0f} & {row['SFC_lbh']:.4f} & "
-            f"{row['SFC_improvement_pct']:.4f} & {row['fuel_saving_pct']:.4f} \\\\"
-        )
-    lines += [r"    \bottomrule", r"  \end{tabular}", r"\end{table}"]
-    (tables_dir / "ge9x_sfc_improvement.tex").write_text("\n".join(lines), encoding="utf-8")
+    # ── LaTeX table ───────────────────────────────────────────────────────
+    export_table(
+        df_key[["ClCd_new", "SFC_lbh", "SFC_improvement_pct", "fuel_saving_pct"]].rename(
+            columns={
+                "ClCd_new":           r"$C_L/C_D$ [-]",
+                "SFC_lbh":            r"SFC [lb/lbf$\cdot$h]",
+                "SFC_improvement_pct": r"$\Delta$SFC [\%]",
+                "fuel_saving_pct":    r"Fuel saving [\%]",
+            }
+        ),
+        output_path=tables_dir / "ge9x_sfc_improvement.tex",
+        caption=(
+            "Fuel consumption improvement as a function of aerodynamic efficiency"
+            r" $C_L/C_D$ for the GE9X-105B1A engine in takeoff phase."
+        ),
+        label="ge9x_sfc_improvement",
+    )
     LOGGER.info("LaTeX table written: ge9x_sfc_improvement.tex")
 
     # ── Figures ───────────────────────────────────────────────────────────

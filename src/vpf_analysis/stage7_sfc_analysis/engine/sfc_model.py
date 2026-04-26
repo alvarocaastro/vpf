@@ -16,7 +16,7 @@ def compute_sfc_improvement(
     ClCd_new: float,
     SFC_design: float,
     k_throttle: float = 0.08,
-) -> dict:
+) -> dict[str, float]:
     """Estimate fuel burn improvement when Cl/Cd increases from ref to new.
 
     Parameters
