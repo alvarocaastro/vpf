@@ -18,8 +18,7 @@ from vpf_analysis.config_loader import (
     get_ncrit_table,
     get_reynolds_table,
     get_selection_alpha_range,
-    get_selection_ncrit,
-    get_selection_reynolds,
+    get_selection_conditions,
     get_target_mach,
 )
 
@@ -57,14 +56,21 @@ def _footer() -> List[str]:
 
 def generate_stage1_summary(stage_dir: Path, selected_airfoil_name: str) -> str:
     alpha = get_selection_alpha_range()
-    re    = get_selection_reynolds()
-    nc    = get_selection_ncrit()
+    conds = get_selection_conditions()
     lines = _header(1, "AIRFOIL SELECTION")
     lines += [
         f"Selected airfoil : {selected_airfoil_name}",
         f"Alpha range      : {alpha['min']:.1f}° → {alpha['max']:.1f}° (step {alpha['step']:.2f}°)",
-        f"Reference Re     : {re:.2e}  |  Ncrit: {nc:.1f}",
         "Scoring criteria : (CL/CD)_2nd·1.20  +  robustness_LD·0.35  +  stability_margin·0.80",
+        "  (normalised per condition, then mission-weighted)",
+        "",
+        "Mission conditions evaluated:",
+    ]
+    for c in conds:
+        lines.append(
+            f"  {c['label']:<16} {c['flight_condition']}/{c['section']:<10}  weight={float(c['weight']):.2f}"
+        )
+    lines += [
         "",
         "Outputs: stage artefacts generated successfully.",
     ]

@@ -218,14 +218,9 @@ def step_2_airfoil_selection() -> Stage1Result:
         stage1_dir = base_config.get_stage_dir(1)
         stage1_dir.mkdir(parents=True, exist_ok=True)
 
-        selection_condition = SimulationCondition(
-            name="Selection",
-            mach_rel=cfg.reference_mach,
-            reynolds=cfg.selection_reynolds,
-            alpha_min=cfg.selection_alpha_min,
-            alpha_max=cfg.selection_alpha_max,
-            alpha_step=cfg.selection_alpha_step,
-            ncrit=cfg.selection_ncrit,
+        conditions = cfg.selection_conditions
+        cond_summary = "  ".join(
+            f"{c.label}(Re={c.reynolds:.1e}, w={c.weight:.2f})" for c in conditions
         )
 
         airfoils = []
@@ -242,8 +237,12 @@ def step_2_airfoil_selection() -> Stage1Result:
                 "Ensure data/airfoils/ contains the airfoil profiles."
             )
 
-        console.print(f"    [vpf.info]Evaluating [bold]{len(airfoils)}[/bold] candidate airfoils at "
-                      f"Re={cfg.selection_reynolds:.2e}, M={cfg.reference_mach:.2f}[/vpf.info]")
+        console.print(
+            f"    [vpf.info]Evaluating [bold]{len(airfoils)}[/bold] airfoils across "
+            f"[bold]{len(conditions)}[/bold] conditions — {cond_summary}[/vpf.info]"
+        )
+
+        total_runs = len(airfoils) * len(conditions)
 
         # Progress bar for candidate evaluation
         with Progress(
@@ -255,7 +254,7 @@ def step_2_airfoil_selection() -> Stage1Result:
             console=console,
             transient=True,
         ) as prg:
-            task = prg.add_task("Running XFOIL on candidates…", total=len(airfoils))
+            task = prg.add_task("Running XFOIL on candidates…", total=total_runs)
 
             xfoil = XfoilRunnerAdapter(final_analysis=False)
             service = AirfoilSelectionService(xfoil_runner=xfoil, results_dir=stage1_dir)
@@ -264,7 +263,13 @@ def step_2_airfoil_selection() -> Stage1Result:
                 prg.update(task, advance=1, description=f"XFOIL: [bold]{name}[/bold]")
 
             result = service.run_selection(
-                airfoils, selection_condition, progress_callback=_on_airfoil
+                airfoils,
+                conditions=conditions,
+                alpha_min=cfg.selection_alpha_min,
+                alpha_max=cfg.selection_alpha_max,
+                alpha_step=cfg.selection_alpha_step,
+                mach_ref=cfg.reference_mach,
+                progress_callback=_on_airfoil,
             )
 
         console.print(f"    [vpf.ok]→[/vpf.ok]  Selected airfoil: "

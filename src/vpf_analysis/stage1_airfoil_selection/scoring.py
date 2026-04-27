@@ -86,6 +86,83 @@ def score_airfoil(df: pd.DataFrame) -> AirfoilScore:
     )
 
 
+def aggregate_weighted_scores(
+    scores_by_condition: dict[str, list[AirfoilScore]],
+    weights: dict[str, float],
+    primary_label: str | None = None,
+) -> list[AirfoilScore]:
+    """Aggregate per-condition normalised scores into a single mission-weighted score.
+
+    For each condition the scores are normalised with ``normalise_scores`` (min-max
+    across candidates within that condition).  The final ``total_score`` for each
+    airfoil is the weighted mean of those normalised totals, ignoring conditions
+    where XFOIL failed (NaN) and renormalising the weights accordingly.
+
+    Display metrics (max_ld, alpha_opt, stall_alpha, stability_margin, robustness_ld)
+    are taken from the condition with the highest weight (the *primary* condition),
+    falling back to a weighted mean when the primary data are NaN.
+    """
+    if not scores_by_condition:
+        return []
+
+    # Normalise within each condition independently
+    normalised: dict[str, list[AirfoilScore]] = {
+        lbl: normalise_scores(scores) for lbl, scores in scores_by_condition.items()
+    }
+
+    labels = list(normalised.keys())
+    n_airfoils = len(normalised[labels[0]])
+
+    if primary_label is None or primary_label not in normalised:
+        primary_label = max(weights, key=lambda l: weights.get(l, 0.0))
+
+    result: list[AirfoilScore] = []
+    for i in range(n_airfoils):
+        airfoil_name = normalised[labels[0]][i].airfoil
+
+        # Weighted total_score, skipping NaN conditions for this airfoil
+        w_sum = 0.0
+        weighted_total = 0.0
+        for lbl in labels:
+            s = normalised[lbl][i]
+            if np.isnan(s.total_score):
+                continue
+            w = weights.get(lbl, 0.0)
+            weighted_total += w * s.total_score
+            w_sum += w
+
+        agg_total = weighted_total / w_sum if w_sum > 0.0 else np.nan
+
+        # Display metrics from primary condition; fall back to weighted mean when NaN
+        primary = normalised[primary_label][i]
+        if not np.isnan(primary.max_ld):
+            disp = primary
+            result.append(dataclasses.replace(disp, total_score=agg_total))
+        else:
+            # Weighted mean of non-NaN metric values across conditions
+            def _wmean(attr: str) -> float:
+                ws, vs = 0.0, 0.0
+                for lbl in labels:
+                    v = getattr(normalised[lbl][i], attr)
+                    if not np.isnan(v):
+                        w = weights.get(lbl, 0.0)
+                        vs += w * v
+                        ws += w
+                return vs / ws if ws > 0.0 else np.nan
+
+            result.append(AirfoilScore(
+                airfoil=airfoil_name,
+                max_ld=_wmean("max_ld"),
+                alpha_opt=_wmean("alpha_opt"),
+                stall_alpha=_wmean("stall_alpha"),
+                stability_margin=_wmean("stability_margin"),
+                robustness_ld=_wmean("robustness_ld"),
+                total_score=agg_total,
+            ))
+
+    return result
+
+
 def normalise_scores(scores: list[AirfoilScore]) -> list[AirfoilScore]:
     """Return new AirfoilScore list with total_score recomputed after min-max normalisation.
 

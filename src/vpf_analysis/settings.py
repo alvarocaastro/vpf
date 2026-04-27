@@ -16,6 +16,7 @@ from vpf_analysis.config.domain import (  # noqa: F401  (re-exported for backwar
     FanGeometry,
     PhysicsConstants,
     PipelineSettings,
+    ResolvedSelectionCondition,
     XfoilSettings,
 )
 
@@ -160,8 +161,12 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
     target_mach = {k: float(v) for k, v in raw["target_mach"].items()}
 
     alpha_cfg = raw["alpha"]
-    sel_cfg = raw.get("selection_alpha", alpha_cfg)
     sel = raw.get("selection", {})
+    sel_cfg = {
+        "min":  sel.get("alpha_min",  -2.0),
+        "max":  sel.get("alpha_max",  15.0),
+        "step": sel.get("alpha_step",  0.15),
+    }
 
     fg = raw["fan_geometry"]
     rpm = float(fg["rpm"])
@@ -199,6 +204,29 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
         }.items() if v is not None}
     )
 
+    # Resolve selection conditions: look up Re and Ncrit from the tables already parsed.
+    _raw_conditions = sel.get("conditions", [])
+    if not _raw_conditions:
+        # Backward-compat fallback: single condition using legacy keys.
+        _raw_conditions = [{
+            "label": "selection",
+            "flight_condition": "cruise",
+            "section": "mid_span",
+            "weight": 1.0,
+        }]
+    _weight_sum = sum(float(c.get("weight", 1.0)) for c in _raw_conditions)
+    selection_conditions = [
+        ResolvedSelectionCondition(
+            label=c["label"],
+            flight_condition=c["flight_condition"],
+            section=c["section"],
+            reynolds=reynolds_table[c["flight_condition"]][c["section"]],
+            ncrit=ncrit_table[c["flight_condition"]],
+            weight=float(c.get("weight", 1.0)) / _weight_sum,
+        )
+        for c in _raw_conditions
+    ]
+
     cruise_alpha_min_raw = raw.get("cruise_alpha_min", {})
     cruise_alpha_min = {k: float(v) for k, v in cruise_alpha_min_raw.items()}
 
@@ -219,8 +247,7 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
         selection_alpha_min=float(sel_cfg["min"]),
         selection_alpha_max=float(sel_cfg["max"]),
         selection_alpha_step=float(sel_cfg["step"]),
-        selection_reynolds=float(sel.get("reynolds", 3.0e6)),
-        selection_ncrit=float(sel.get("ncrit", 7.0)),
+        selection_conditions=selection_conditions,
         fan=fan,
         blade=blade,
         airfoil_geometry=airfoil_geom,

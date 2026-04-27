@@ -121,6 +121,21 @@ class AirfoilGeometry:
     korn_kappa: float
 
 
+@dataclass(frozen=True)
+class ResolvedSelectionCondition:
+    """One airfoil-selection condition with Re and Ncrit already resolved from the config tables.
+
+    Alpha range and reference Mach are shared across all conditions and live in PipelineSettings.
+    ``weight`` is normalised to [0, 1] and the set of conditions sums to 1.0.
+    """
+    label: str                # e.g. "cruise_mid"
+    flight_condition: str     # key in reynolds/ncrit tables, e.g. "cruise"
+    section: str              # "root" | "mid_span" | "tip"
+    reynolds: float
+    ncrit: float
+    weight: float
+
+
 @dataclass
 class PipelineSettings:
     """Full pipeline configuration loaded from YAML files.
@@ -142,11 +157,14 @@ class PipelineSettings:
     alpha_max: float = 23.0
     alpha_step: float = 0.15
 
-    selection_alpha_min: float = -5.0
-    selection_alpha_max: float = 20.0
+    # Shared alpha sweep used for all selection conditions
+    selection_alpha_min: float = -2.0
+    selection_alpha_max: float = 15.0
     selection_alpha_step: float = 0.15
-    selection_reynolds: float = 3.0e6
-    selection_ncrit: float = 4.0   # turbomachinery Tu~0.5-1% → Ncrit~4
+
+    # Mission-weighted conditions evaluated during airfoil selection (Stage 1).
+    # Populated by settings.py from analysis_config.yaml selection.conditions[].
+    selection_conditions: List[ResolvedSelectionCondition] = field(default_factory=list)
 
     fan: FanGeometry = field(default_factory=lambda: FanGeometry(
         rpm=2200.0, omega_rad_s=230.4, radii_m={}, axial_velocity_m_s={},

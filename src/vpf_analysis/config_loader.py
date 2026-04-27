@@ -47,15 +47,17 @@ def get_alpha_range() -> dict[str, float]:
 
 
 def get_selection_alpha_range() -> dict[str, float]:
-    return {k: float(v) for k, v in load_config()["selection_alpha"].items()}
+    sel = load_config()["selection"]
+    return {
+        "min":  float(sel.get("alpha_min",  -2.0)),
+        "max":  float(sel.get("alpha_max",  15.0)),
+        "step": float(sel.get("alpha_step",  0.15)),
+    }
 
 
-def get_selection_reynolds() -> float:
-    return float(load_config()["selection"]["reynolds"])
-
-
-def get_selection_ncrit() -> float:
-    return float(load_config()["selection"]["ncrit"])
+def get_selection_conditions() -> list[dict]:
+    """Return raw selection condition specs from the YAML (label, flight_condition, section, weight)."""
+    return list(load_config()["selection"].get("conditions", []))
 
 
 def get_plot_settings() -> dict[str, Any]:

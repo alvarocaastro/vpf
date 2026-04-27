@@ -17,7 +17,11 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from vpf_analysis.stage1_airfoil_selection.scoring import AirfoilScore, score_airfoil
+from vpf_analysis.stage1_airfoil_selection.scoring import (
+    AirfoilScore,
+    aggregate_weighted_scores,
+    score_airfoil,
+)
 
 
 class TestAirfoilSelection:
@@ -186,6 +190,62 @@ class TestAirfoilSelection:
 
         assert best_score.airfoil == "Fan Candidate"
         assert best_score.max_ld == pytest.approx(99.14, abs=1e-2)
+
+    # ── aggregate_weighted_scores ──────────────────────────────────────────────
+
+    def test_aggregate_selects_best_across_conditions(self) -> None:
+        """Airfoil A wins at cruise (w=0.7); B wins at takeoff (w=0.3) → A wins overall."""
+        a_cruise = AirfoilScore(airfoil="A", max_ld=100.0, alpha_opt=5.0, stall_alpha=12.0,
+                                stability_margin=7.0, robustness_ld=90.0, total_score=0.0)
+        b_cruise = AirfoilScore(airfoil="B", max_ld=80.0,  alpha_opt=5.0, stall_alpha=12.0,
+                                stability_margin=7.0, robustness_ld=70.0, total_score=0.0)
+        a_takeoff = AirfoilScore(airfoil="A", max_ld=70.0, alpha_opt=4.0, stall_alpha=11.0,
+                                 stability_margin=7.0, robustness_ld=60.0, total_score=0.0)
+        b_takeoff = AirfoilScore(airfoil="B", max_ld=90.0, alpha_opt=4.0, stall_alpha=11.0,
+                                 stability_margin=7.0, robustness_ld=85.0, total_score=0.0)
+
+        result = aggregate_weighted_scores(
+            {"cruise": [a_cruise, b_cruise], "takeoff": [a_takeoff, b_takeoff]},
+            weights={"cruise": 0.7, "takeoff": 0.3},
+            primary_label="cruise",
+        )
+        scores = {s.airfoil: s.total_score for s in result}
+        assert scores["A"] > scores["B"], "A should win because it dominates the higher-weight cruise condition"
+
+    def test_aggregate_nan_condition_is_skipped(self) -> None:
+        """If one condition fails for an airfoil, the weight is redistributed to valid conditions."""
+        import numpy as np
+        good = AirfoilScore(airfoil="A", max_ld=90.0, alpha_opt=5.0, stall_alpha=12.0,
+                            stability_margin=7.0, robustness_ld=80.0, total_score=0.0)
+        nan_score = AirfoilScore(airfoil="A", max_ld=np.nan, alpha_opt=np.nan, stall_alpha=np.nan,
+                                 stability_margin=np.nan, robustness_ld=np.nan, total_score=np.nan)
+        other = AirfoilScore(airfoil="B", max_ld=80.0, alpha_opt=5.0, stall_alpha=12.0,
+                             stability_margin=7.0, robustness_ld=70.0, total_score=0.0)
+        other2 = AirfoilScore(airfoil="B", max_ld=80.0, alpha_opt=5.0, stall_alpha=12.0,
+                              stability_margin=7.0, robustness_ld=70.0, total_score=0.0)
+
+        result = aggregate_weighted_scores(
+            {"cond1": [nan_score, other], "cond2": [good, other2]},
+            weights={"cond1": 0.5, "cond2": 0.5},
+            primary_label="cond2",
+        )
+        a_result = next(s for s in result if s.airfoil == "A")
+        assert not np.isnan(a_result.total_score), "NaN condition should be skipped, not propagated"
+
+    def test_aggregate_weights_are_normalised(self) -> None:
+        """Weights that do not sum to 1.0 are normalised internally."""
+        s_a = AirfoilScore(airfoil="A", max_ld=100.0, alpha_opt=5.0, stall_alpha=12.0,
+                           stability_margin=7.0, robustness_ld=90.0, total_score=0.0)
+        s_b = AirfoilScore(airfoil="B", max_ld=80.0,  alpha_opt=5.0, stall_alpha=12.0,
+                           stability_margin=7.0, robustness_ld=70.0, total_score=0.0)
+
+        result_equal = aggregate_weighted_scores(
+            {"c": [s_a, s_b]}, weights={"c": 1.0}, primary_label="c"
+        )
+        result_scaled = aggregate_weighted_scores(
+            {"c": [s_a, s_b]}, weights={"c": 42.0}, primary_label="c"
+        )
+        assert result_equal[0].total_score == pytest.approx(result_scaled[0].total_score, abs=1e-6)
 
     def test_score_airfoil_returns_correct_airfoil_name(self) -> None:
         """Test that score_airfoil correctly extracts and returns airfoil name."""
