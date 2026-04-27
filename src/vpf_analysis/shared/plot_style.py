@@ -16,6 +16,8 @@ from typing import Generator
 
 import matplotlib as mpl
 
+mpl.use("Agg", force=True)
+
 # ── Colour palette (Paul Tol's colorblind-safe "bright") ─────────────────────
 COLORS = {
     "takeoff":  "#EE6677",   # rose

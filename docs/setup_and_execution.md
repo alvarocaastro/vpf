@@ -72,13 +72,13 @@ When executed from the beginning, the pipeline resets stage result directories. 
 `run_analysis.py` supports stage ranges:
 
 ```powershell
-python run_analysis.py --from-stage 5 --to-stage 8
+python run_analysis.py --from-stage 3 --to-stage 7
 ```
 
 | Option | Meaning |
 |---|---|
-| `--from-stage N` | Start from orchestrator step N. Previous result files must already exist. |
-| `--to-stage N` | Stop after orchestrator step N. |
+| `--from-stage N` | Start from analysis stage N, where stages are numbered 1 through 7. Previous result files must already exist. |
+| `--to-stage N` | Stop after analysis stage N. |
 
 Important: the CLI has 8 steps because step 1 cleans results. Result folders are named Stage 1 to Stage 7.
 
@@ -150,4 +150,3 @@ pytest tests/test_pipeline_contracts.py -v
 | `ModuleNotFoundError: vpf_analysis` with `python -m` | `src` is not on `PYTHONPATH`. | Set `$env:PYTHONPATH = ".\src"`. |
 | XFOIL convergence warnings | Difficult alpha range, high Reynolds, timeout, or profile behavior. | Review `analysis_config.yaml` XFOIL settings and Stage 2 summaries. |
 | Reverse BEM path fails due to `scipy` | `scipy` is not declared in dependencies. | Install `scipy` if that path is intentionally used. |
-

@@ -170,7 +170,7 @@ At design CL ≈ 0.4: `M_dd ≈ 0.73`. At lower cruise CL ≈ 0.2: `M_dd ≈ 0.7
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | `min`     | −5.0° | Below zero-lift; captures negative-incidence reverse-thrust region |
-| `max`     | 23.0° | Covers post-stall for all Re; NACA 6-series stalls at ~15–17° |
+| `max`     | 18.0° | Covers the realistic fan incidence range and captures NACA 6-series stall without forcing deep post-stall XFOIL points |
 | `step`    | 0.15° | Resolution for peak search accuracy |
 
 Stage 1 (airfoil selection) uses a narrower range: −2° to 18°, focused on the

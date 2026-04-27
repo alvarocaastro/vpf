@@ -45,7 +45,7 @@ class ReverseSweepPoint:
     cl_mid:  float;  cd_mid:  float
     cl_tip:  float;  cd_tip:  float
 
-    # Whether alpha_rev falls within the Stage 3 polar range [-5°, 23°]
+    # Whether alpha_rev falls within the available Stage 3 polar range.
     in_polar_range_root: bool
     in_polar_range_mid: bool
     in_polar_range_tip: bool

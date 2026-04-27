@@ -57,6 +57,48 @@ class XfoilError(RuntimeError):
     """Raised when XFOIL fails after exhausting all retries."""
 
 
+def _expected_alpha_count(request: XfoilPolarRequest) -> int:
+    """Return the expected number of ASEQ alpha samples for a request."""
+    return int(round((request.alpha_end - request.alpha_start) / request.alpha_step)) + 1
+
+
+def _expected_alpha_values(request: XfoilPolarRequest) -> list[float]:
+    """Return the alpha grid requested from XFOIL's ASEQ command."""
+    n_points = max(_expected_alpha_count(request), 1)
+    return [
+        round(request.alpha_start + idx * request.alpha_step, 6)
+        for idx in range(n_points)
+    ]
+
+
+def _polar_coverage_quality(
+    request: XfoilPolarRequest,
+    polar_path: Path,
+) -> tuple[int, float, list[float]]:
+    """Estimate convergence quality from requested-vs-generated alpha points.
+
+    XFOIL's stdout format is not stable enough to count successful alpha points
+    reliably. The polar file is the authoritative source for this pipeline:
+    each generated alpha row corresponds to one usable aerodynamic sample.
+    """
+    from vpf_analysis.adapters.xfoil.xfoil_parser import parse_polar_file
+
+    expected_alphas = _expected_alpha_values(request)
+    expected = len(expected_alphas)
+    df = parse_polar_file(polar_path)
+    generated_alphas = {
+        round(float(alpha), 6)
+        for alpha in df.get("alpha", [])
+    }
+    missing_alphas = [
+        alpha for alpha in expected_alphas
+        if alpha not in generated_alphas
+    ]
+    missing = len(missing_alphas)
+    rate = (expected - missing) / expected if expected else 0.0
+    return missing, rate, missing_alphas
+
+
 def _build_command_script(request: XfoilPolarRequest) -> str:
     """Build the interactive XFOIL command script.
 
@@ -221,12 +263,11 @@ def run_xfoil_polar(
         conv_info = check_xfoil_convergence(stdout_text)
 
         if conv_info.has_failures:
-            LOGGER.warning(
-                "XFOIL reported %d convergence failure(s) for %s "
-                "(convergence rate: %.0f%%)",
+            LOGGER.debug(
+                "XFOIL stdout reported %d convergence warning event(s) for %s. "
+                "Final quality is computed from generated polar coverage.",
                 conv_info.n_convergence_failures,
                 context,
-                conv_info.convergence_rate * 100,
             )
 
         if proc.returncode != 0:
@@ -250,12 +291,20 @@ def run_xfoil_polar(
                 LOGGER.warning("[%s] %s", context, last_error)
                 continue
             src.replace(request.output_file)
+            convergence_failures, convergence_rate, failed_alpha_values = _polar_coverage_quality(
+                request, request.output_file
+            )
+        else:
+            convergence_failures = conv_info.n_convergence_failures
+            convergence_rate = conv_info.convergence_rate
+            failed_alpha_values = conv_info.failed_alpha_values
 
         LOGGER.info(
-            "XFOIL OK: %s (reintentos=%d, fallos-conv=%d)",
+            "XFOIL OK: %s (reintentos=%d, missing-points=%d, coverage=%.0f%%)",
             context,
             attempt,
-            conv_info.n_convergence_failures,
+            convergence_failures,
+            convergence_rate * 100,
         )
 
         # ── Cache write ───────────────────────────────────────────────────────
@@ -272,9 +321,9 @@ def run_xfoil_polar(
             success=True,
             output_file=request.output_file,
             n_retries_used=attempt,
-            convergence_failures=conv_info.n_convergence_failures,
-            convergence_rate=conv_info.convergence_rate,
-            failed_alpha_values=conv_info.failed_alpha_values,
+            convergence_failures=convergence_failures,
+            convergence_rate=convergence_rate,
+            failed_alpha_values=failed_alpha_values,
         )
 
     raise XfoilError(

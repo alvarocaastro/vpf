@@ -154,7 +154,7 @@ class PipelineSettings:
     reference_mach: float = 0.2
 
     alpha_min: float = -5.0
-    alpha_max: float = 23.0
+    alpha_max: float = 18.0
     alpha_step: float = 0.15
 
     # Shared alpha sweep used for all selection conditions

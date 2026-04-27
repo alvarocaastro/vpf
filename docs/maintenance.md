@@ -150,7 +150,7 @@ Run targeted tests for focused changes:
 | `scipy` used but not declared | Full reverse BEM support may fail. | Add `scipy` if the BEM path is officially supported, or remove the dependency. |
 | Fixed condition and section order in several modules | Makes extension harder. | Centralize ordering from settings and update plots dynamically. |
 | `results/` is not versioned | Reproducibility depends on local files. | Add result archiving workflow or checksums for report snapshots. |
-| Stage numbering mismatch | New contributors may confuse CLI stage 8 with result Stage 7. | Keep documentation and CLI help explicit. |
+| Stage numbering mismatch | Resolved: CLI options now use analysis stages 1 through 7. | Keep documentation and CLI help aligned with `run_analysis.py`. |
 | Root README may drift from current outputs | Conflicting docs can confuse users. | Make `docs/` the authoritative documentation set or update README after major changes. |
 | Reverse-thrust aerodynamic model is partial in main flow | Could be misread as validated reverse thrust prediction. | Clearly label Stage 6 as mechanism-weight analysis unless BEM is validated. |
 
@@ -165,4 +165,3 @@ Run targeted tests for focused changes:
 - Add calibrated fan-map data if available.
 - Add full radial integration instead of three-section approximations.
 - Add experimental or CFD validation for compressibility, 3D corrections, and reverse thrust.
-

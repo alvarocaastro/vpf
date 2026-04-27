@@ -119,3 +119,27 @@ def test_karman_tsien_ld_kt_no_inf():
 
     assert not _np.isinf(result["ld_kt"]).any(), "ld_kt must contain no inf values"
     assert result["ld_kt"].notna().all(), "ld_kt must have no NaN for a clean polar"
+
+
+def test_stage3_trims_deep_post_stall_alpha():
+    """Stage 3 should not carry deep post-stall points into correction models."""
+    from vpf_analysis.stage3_compressibility_correction.correction_service import (
+        CompressibilityCorrectionService,
+    )
+
+    df = pd.DataFrame({
+        "alpha": list(range(-5, 24)),
+        "cl": [
+            -0.4, -0.3, -0.2, -0.1, 0.0,
+            0.1, 0.2, 0.35, 0.5, 0.65,
+            0.8, 0.95, 1.05, 1.15, 1.2,
+            1.22, 1.18, 1.10, 0.95, 0.80,
+            0.65, 0.50, 0.35, 0.20, 0.10,
+            0.0, -0.05, -0.1, -0.15,
+        ],
+    })
+
+    trimmed = CompressibilityCorrectionService._trim_post_stall_alpha(df)
+
+    assert trimmed["alpha"].max() <= 17.0
+    assert len(trimmed) < len(df)

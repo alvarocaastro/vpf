@@ -24,6 +24,16 @@ from typing import Generator
 
 import pandas as pd
 
+# Keep Rich output from crashing on Windows consoles using legacy code pages.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+import matplotlib
+
+matplotlib.use("Agg", force=True)
+
 # ── Rich imports ─────────────────────────────────────────────────────────────
 from rich import box
 from rich.console import Console
@@ -745,9 +755,19 @@ def _load_s1_from_disk() -> Stage1Result:
             f"Stage 1 result not found: {dat}\n"
             "Run from stage 1 first: python run_analysis.py"
         )
+    selected_name = dat.read_text(encoding="utf-8").strip()
+    selected_spec = next(
+        (spec for spec in base_config.AIRFOILS if spec["name"] == selected_name),
+        None,
+    )
+    if selected_spec is None:
+        raise ValueError(
+            f"Selected airfoil '{selected_name}' is not present in config/airfoils.yaml"
+        )
+    selected_dat = base_config.AIRFOIL_DATA_DIR / selected_spec["dat_file"]
     return Stage1Result(
-        selected_airfoil_name=dat.stem.replace("_", " ").title(),
-        selected_airfoil_dat=dat,
+        selected_airfoil_name=selected_name,
+        selected_airfoil_dat=selected_dat,
         stage_dir=stage1_dir,
         selection_dir=stage1_dir / "airfoil_selection",
     )
@@ -902,13 +922,13 @@ def main() -> None:
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
-        "--from-stage", type=int, default=1, choices=range(1, 9), metavar="N",
-        help="Start from stage N (1–8). Requires previous stages to have run already.\n"
-             "Example: --from-stage 7  (re-runs only SFC analysis)",
+        "--from-stage", type=int, default=1, choices=range(1, 8), metavar="N",
+        help="Start from analysis stage N (1-7). Requires previous stages to have run already.\n"
+             "Example: --from-stage 3  (starts at compressibility corrections)",
     )
     parser.add_argument(
-        "--to-stage", type=int, default=8, choices=range(1, 9), metavar="N",
-        help="Stop after stage N (1–8).\n"
+        "--to-stage", type=int, default=7, choices=range(1, 8), metavar="N",
+        help="Stop after analysis stage N (1-7).\n"
              "Example: --to-stage 4  (stops after performance metrics)",
     )
     args = parser.parse_args()
@@ -934,6 +954,8 @@ def main() -> None:
 
     # ── Overall progress bar ──────────────────────────────────────────────────
     n_steps = to_stage - from_stage + 1
+    if from_stage == 1:
+        n_steps += 1  # cleanup before Stage 1
     overall = Progress(
         SpinnerColumn(spinner_name="earth", style="bright_cyan"),
         TextColumn("[bold bright_white]Overall progress"),
@@ -966,24 +988,21 @@ def main() -> None:
                 s5 = _load_s5_from_disk()
             if from_stage > 6:
                 s6 = _load_s6_from_disk()
-            if from_stage > 7:
-                s7 = _load_s7_from_disk()
-
-            if from_stage <= 1 <= to_stage:
+            if from_stage == 1:
                 step_1_clean_results(); overall.advance(pipeline_task)
-            if from_stage <= 2 <= to_stage:
+            if from_stage <= 1 <= to_stage:
                 s1 = step_2_airfoil_selection(); overall.advance(pipeline_task)
-            if from_stage <= 3 <= to_stage:
+            if from_stage <= 2 <= to_stage:
                 s2 = step_3_xfoil_simulations(s1); overall.advance(pipeline_task)
-            if from_stage <= 4 <= to_stage:
+            if from_stage <= 3 <= to_stage:
                 s3 = step_4_compressibility_correction(s2); overall.advance(pipeline_task)
-            if from_stage <= 5 <= to_stage:
+            if from_stage <= 4 <= to_stage:
                 s4 = step_5_metrics_and_figures(s3); overall.advance(pipeline_task)
-            if from_stage <= 6 <= to_stage:
+            if from_stage <= 5 <= to_stage:
                 s5 = step_6_pitch_kinematics(); overall.advance(pipeline_task)
-            if from_stage <= 7 <= to_stage:
+            if from_stage <= 6 <= to_stage:
                 s6 = step_7_reverse_thrust(); overall.advance(pipeline_task)
-            if from_stage <= 8 <= to_stage:
+            if from_stage <= 7 <= to_stage:
                 s7 = step_8_sfc_analysis(); overall.advance(pipeline_task)
 
         except Exception as exc:

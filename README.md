@@ -48,7 +48,7 @@ python run_analysis.py
 Run a stage range:
 
 ```powershell
-python run_analysis.py --from-stage 5 --to-stage 8
+python run_analysis.py --from-stage 3 --to-stage 7
 ```
 
 Run the sensitivity analysis after the main results exist:
@@ -103,7 +103,7 @@ High-level stages:
 - `results/` is generated output and is ignored by Git except for `.gitkeep`.
 - `docs/` intentionally contains Markdown files only.
 - External reference PDFs and auxiliary reference material are stored in `references/`.
-- Stage numbering in `run_analysis.py` includes an initial cleanup step, so the CLI goes up to stage 8 while result folders go up to `stage7_sfc_analysis`.
+- Stage numbering in `run_analysis.py` now matches the analysis stages: `1` through `7`. Cleanup runs automatically before Stage 1 during a full run.
 - The reverse-thrust stage currently documents a mechanism-weight and SFC trade study; full aerodynamic reverse-thrust validation is pending higher-fidelity data.
 
 ## License

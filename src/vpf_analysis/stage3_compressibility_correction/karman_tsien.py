@@ -70,7 +70,7 @@ class KarmanTsienModel:
         # back to PG, which over-estimates the correction linearly and loses the
         # non-linear behaviour near sonic.
         if m_tgt > kt_max:
-            LOGGER.warning(
+            LOGGER.debug(
                 "M_target=%.3f exceeds KT experimental validation range (%.2f). "
                 "Applying KT regardless — better than PG at this Mach.",
                 m_tgt, kt_max,

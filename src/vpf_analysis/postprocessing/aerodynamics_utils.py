@@ -84,7 +84,7 @@ def find_second_peak_row(
                 f"No data with CL >= {cl_min} (column '{cl_col}') in polar. "
                 "Cannot determine second aerodynamic peak."
             )
-        LOGGER.warning(
+        LOGGER.debug(
             "No data at alpha >= %.1f°. Falling back to full data range.", alpha_min
         )
         df_peak = df_clean
@@ -117,7 +117,7 @@ def compute_stall_alpha(df: pd.DataFrame, cl_col: str) -> float:
 
     if stall_rows.empty:
         alpha_stall = float(df_clean["alpha"].iloc[-1])
-        LOGGER.warning(
+        LOGGER.debug(
             "No clear stall detected (CL never drops %.0f%% below CL_max=%.3f). "
             "Using last alpha=%.2f° as stall estimate.",
             5,

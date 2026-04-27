@@ -28,12 +28,15 @@ from vpf_analysis.stage3_compressibility_correction.correction_result import (
 from vpf_analysis.stage3_compressibility_correction.critical_mach import (
     estimate_mcr,
 )
+from vpf_analysis.postprocessing.aerodynamics_utils import compute_stall_alpha
 from vpf_analysis.shared.plot_style import (
     COLORS,
     FLIGHT_LABELS,
     SECTION_LABELS,
     apply_style,
 )
+
+_POST_STALL_TRIM_MARGIN_DEG = 1.0
 
 
 class CompressibilityCorrectionService:
@@ -59,7 +62,7 @@ class CompressibilityCorrectionService:
         if not input_polar_path.is_file():
             raise FileNotFoundError(f"Polar file not found: {input_polar_path}")
 
-        df_original = pd.read_csv(input_polar_path)
+        df_original = self._trim_post_stall_alpha(pd.read_csv(input_polar_path))
 
         df_pg = self._pg.correct_polar(df_original, case)
         df_corrected = self._kt.correct_polar(df_pg, case)
@@ -96,6 +99,32 @@ class CompressibilityCorrectionService:
             corrected_efficiency_path=polar_path,
             corrected_plot_path=plot_path,
         )
+
+    @staticmethod
+    def _trim_post_stall_alpha(df: pd.DataFrame) -> pd.DataFrame:
+        """Keep only the operational polar range up to stall plus a small margin.
+
+        XFOIL convergence becomes fragile in deep post-stall, and the fan model
+        does not use those points for normal operation. Retaining one degree
+        after the estimated stall preserves the stall marker while avoiding
+        noisy, non-operational correction work.
+        """
+        required = {"alpha", "cl"}
+        if df.empty or not required.issubset(df.columns):
+            return df
+
+        try:
+            alpha_stall = compute_stall_alpha(df, "cl")
+        except Exception:
+            return df
+
+        alpha_limit = alpha_stall + _POST_STALL_TRIM_MARGIN_DEG
+        trimmed = df[df["alpha"] <= alpha_limit].copy()
+
+        if len(trimmed) < 10:
+            return df
+
+        return trimmed
 
     @staticmethod
     def _plot_comparison(
