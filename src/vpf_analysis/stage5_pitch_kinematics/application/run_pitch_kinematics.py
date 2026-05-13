@@ -437,9 +437,9 @@ def _fig_pitch_compromise_loss(
         "Efficiency loss from pitch trade-off — Single actuator",
         pad=8,
     )
-    ax.legend()
+    ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
     fig.tight_layout()
-    fig.savefig(figures_dir / "pitch_compromise_loss.png")
+    fig.savefig(figures_dir / "pitch_compromise_loss.png", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -727,14 +727,14 @@ def _fig_kinematics_comparison(
         ax.set_xticklabels([c.title() for c in conditions])
         if i == 0:
             ax.set_ylabel("Adjustment Angle [°]")
-            ax.legend(loc="lower right", fontsize=8)
+            ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0, fontsize=8)
 
     fig.suptitle(
         "Kinematic pitch adjustment: 3D aerodynamic vs mechanical component",
         fontweight="bold",
     )
     fig.tight_layout()
-    fig.savefig(figures_dir / "kinematics_comparison.png", dpi=300)
+    fig.savefig(figures_dir / "kinematics_comparison.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 

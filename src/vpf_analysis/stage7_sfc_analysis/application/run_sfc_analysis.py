@@ -111,7 +111,7 @@ def _plot_fixed_vs_vpf_efficiency(
         ax.set_xticklabels([SECTION_LABELS[s] for s in _SECTIONS_ORDER])
         ax.set_title(FLIGHT_LABELS.get(cond, cond), fontsize=10, fontweight="bold")
         ax.set_ylabel(r"$C_L/C_D$ [–]", fontsize=8)
-        ax.legend(fontsize=7, loc="lower right")
+        ax.legend(fontsize=7, bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
         ax.grid(axis="y", alpha=0.3)
 
     fig.suptitle(
@@ -119,7 +119,7 @@ def _plot_fixed_vs_vpf_efficiency(
         fontsize=11, fontweight="bold", y=1.01,
     )
     fig.tight_layout()
-    fig.savefig(figures_dir / "sfc_improvement_by_condition.png")
+    fig.savefig(figures_dir / "sfc_improvement_by_condition.png", bbox_inches="tight")
     plt.close(fig)
 
 
