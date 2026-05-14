@@ -383,3 +383,105 @@ consistent with PW1000G/CFM LEAP-NG generation engines.
 - Reference configuration updated: BPR=15, FPR=1.30, D=4.16 m, PGB=2.5
 
 *Generated: 2026-05-14 — UHBPR/GTF Refactoring*
+
+---
+
+## Figure fixes — 2026-05-14
+
+Resolved text-overlap and star-marker misalignment issues across pipeline figures,
+and removed the φ-ψ stage-loading map whose title was truncated and labels were
+illegible at the crowded operating points.
+
+### [FIX] `efficiency_gain_map.png` — reference bar invisible + label collision
+**File:** `src/vpf_analysis/stage7_sfc_analysis/application/run_sfc_analysis.py`
+
+**Problem 1:** The gray "BPR 10 + Fixed pitch (reference)" bars had height = 0 and
+`bar_label` was never called for them, so they were completely invisible despite
+appearing in the legend.
+
+**Problem 2:** At the cruise condition (reference point, gain = 0 %) both the
+BPR 10+VPF and BPR 15+VPF bars also had 0 % gain. Their `bar_label` annotations
+landed at the same screen position, producing the merged string `"0.00%0.00%"`.
+
+**Fix:**
+- `bars_ref` stored and labelled with `bar_label(fmt="%.2f%%")` → "0.00%" appears at
+  the x-axis baseline for every condition, making the reference level explicit.
+- Non-reference bars use a custom loop with `annotate(textcoords="offset points")` that
+  skips labels when `|val| < 0.005 %`, eliminating the cruise overlap.
+
+### [FIX] Stage 4 efficiency curves — star not at visual peak
+**Files:**
+- `src/vpf_analysis/stage4_performance_metrics/plots.py` — `generate_efficiency_plots()`
+- `src/vpf_analysis/stage4_performance_metrics/plots.py` — `generate_section_polar_comparison()`
+
+**Problem:** Both functions plotted the raw polar DataFrame (including inf/NaN entries
+and the laminar-bubble spike at α ≈ 0–2°) while placing the star via
+`find_second_peak_row()` which operates on cleaned data with `alpha >= alpha_min`.
+When the raw curve contained a numerical spike higher than the real aerodynamic peak,
+the star appeared visually displaced from the maximum of the displayed curve.
+
+**Fix:** Data is cleaned (inf/NaN removed) and restricted to `[α_MIN, α_MAX] = [−2°, 14°]`
+before plotting in `generate_efficiency_plots()`. In `generate_section_polar_comparison()`
+inf/NaN are removed before plotting the efficiency panel. The star from
+`find_second_peak_row()` now always falls on the visual peak of the plotted curve.
+
+### [FIX] Stage 4 `_smart_annotation` — label always pushed upper-right
+**File:** `src/vpf_analysis/stage4_performance_metrics/plots.py`
+
+**Problem:** The annotation offset was always `(+6 % x_range, +6 % y_range)`. When the
+efficiency peak lies near the right or top edge of the axes the label was pushed outside
+the plot area or over the axis spine.
+
+**Fix:** Offset direction is now chosen based on the peak's fractional position in the
+axes: if `x_frac > 0.65` the offset goes left; if `y_frac > 0.75` it goes down. This
+keeps the annotation inside the plot for all tested conditions.
+
+### [FIX] Stage 4 `compressibility_comparison.png` — annotation in data coordinates
+**File:** `src/vpf_analysis/stage4_performance_metrics/plots.py` — `plot_efficiency_penalty_overview()`
+
+**Problem:** The Δα / Δ(CL/CD) annotation used a hardcoded data-coordinate offset
+`(alpha_design − 1.2, eff_fixed + 4)`. The `+4` offset scaled with CL/CD values: for
+the descent condition (CL/CD ≈ 100) the label was placed outside the figure area.
+
+**Fix:** Replaced with `xytext=(−32, 22), textcoords="offset points"` — a fixed
+screen-space offset that is independent of the data range.
+
+### [FIX] Stage 5 `efficiency_curves_{cond}.png` — star from pre-computed map
+**File:** `src/vpf_analysis/stage5_pitch_kinematics/application/run_pitch_kinematics.py`
+— `_fig_efficiency_curves()`
+
+**Problem:** The star was placed at `alpha_opt_3d_map[key]` / `cl_cd_max_3d_map[key]`,
+values computed by `compute_rotational_corrections()` from the cascade-corrected polar.
+`build_3d_polar_map()` applies the Du-Selig correction to build the `ld_3d` column that
+is actually plotted, producing a slightly different peak location. As a result the star
+could appear offset from the visual maximum of the displayed 3D curve.
+
+**Fix:** Star position is re-derived directly from the plotted `df_3d["ld_3d"]` column
+(after removing inf/NaN, restricting to `alpha >= 0°` to avoid low-α artefacts). The
+star now always sits exactly at the maximum of the curve visible in the figure.
+
+### [REMOVE] Stage 5 φ-ψ stage-loading map
+**File:** `src/vpf_analysis/stage5_pitch_kinematics/application/run_pitch_kinematics.py`
+
+Removed function `_fig_phi_psi_map()` (91 lines) and its call in `run_pitch_kinematics()`.
+The figure was dropped because:
+- The multi-line title was truncated by `tight_layout` when the legend occupied the right side.
+- With 12 ideal + 12 actual operating points labelled with 5-pt `offset points` annotations,
+  labels for nearby conditions overlapped extensively and were illegible.
+
+The φ-ψ analysis results remain available in `tables/stage_loading.csv` and
+`tables/stage_loading_single_actuator.csv`, and are summarised in
+`pitch_kinematics_summary.txt`.
+
+### Summary
+
+| # | Stage | File | Change | Severity |
+|---|---|---|---|---|
+| 20 | S7 | `run_sfc_analysis.py` | Reference bars labelled; zero-gain label overlap eliminated | 🟡 |
+| 21 | S4 | `plots.py` | Efficiency curve cleaned before plot → star at visual peak | 🟡 |
+| 22 | S4 | `plots.py` | `_smart_annotation` direction adapts to peak position in axes | 🟢 |
+| 23 | S4 | `plots.py` | Penalty overview annotation uses `offset points` (data-coord overflow) | 🟡 |
+| 24 | S5 | `run_pitch_kinematics.py` | Stage 5 star re-derived from plotted `ld_3d` column | 🟡 |
+| 25 | S5 | `run_pitch_kinematics.py` | `_fig_phi_psi_map` removed (truncated title, illegible labels) | 🟡 |
+
+*Generated: 2026-05-14 — Figure quality fixes*
