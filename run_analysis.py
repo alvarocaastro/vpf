@@ -591,7 +591,6 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
                 blade_sections=cfg.blade_sections,
                 stage3_dir=s3.corrected_dir,
                 reynolds_table=cfg.reynolds_table,
-                mach_map=cfg.target_mach,
             )
 
         console.print(f"    [vpf.ok]→[/vpf.ok]  Publication figures saved to [dim]{figures_dir}[/dim]")

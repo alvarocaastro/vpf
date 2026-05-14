@@ -105,36 +105,6 @@ def _ordered_conditions(conditions) -> List[str]:
 # A — Cascade figures
 # ---------------------------------------------------------------------------
 
-def _fig_cascade_solidity(cascade: List[CascadeResult], figures_dir: Path) -> None:
-    """σ(r) with flow regime zones marked."""
-    radii    = [r.radius_m for r in cascade]
-    sigmas   = [r.solidity for r in cascade]
-
-    fig, ax = plt.subplots(figsize=(6.5, 4.5))
-    ax.axhspan(0.0, 0.5,  alpha=0.12, color="#4CAF50", label=r"Isolated airfoil ($\sigma < 0.5$)")
-    ax.axhspan(0.5, 1.5,  alpha=0.12, color="#FF9800", label=r"Moderate cascade ($0.5 \leq \sigma \leq 1.5$)")
-    ax.axhspan(1.5, 5.0,  alpha=0.12, color="#F44336", label=r"High solidity — wide chord ($\sigma > 1.5$)")
-
-    for res in cascade:
-        ax.scatter(res.radius_m, res.solidity,
-                   s=120, color=SECTION_COLORS[res.section],
-                   zorder=5, edgecolors="white", linewidths=0.8)
-        ax.annotate(
-            f"{res.section.replace('_',' ').title()}\nσ={res.solidity:.2f}",
-            (res.radius_m, res.solidity),
-            xytext=(6, 6), textcoords="offset points", fontsize=8,
-        )
-
-    ax.set_xlabel("Blade radius r [m]")
-    ax.set_ylabel(r"Solidity $\sigma = c/s$ [—]")
-    ax.set_title(r"Cascade solidity $\sigma(r)$ per blade section", pad=8)
-    ax.set_xlim(0, max(radii) * 1.3)
-    ax.set_ylim(0, max(sigmas) * 1.5)
-    ax.legend(loc="upper right", fontsize=8)
-    fig.tight_layout()
-    fig.savefig(figures_dir / "cascade_solidity_profile.png")
-    plt.close(fig)
-
 
 def _fig_cascade_cl_correction(cascade: List[CascadeResult], figures_dir: Path) -> None:
     """CL_2D vs CL_cascade (at α_opt_cruise) per section."""
@@ -1087,7 +1057,6 @@ def run_pitch_kinematics() -> None:
     LOGGER.info("Generating figures...")
 
     # Cascada
-    _fig_cascade_solidity(cascade_results, figures_dir)
     _fig_cascade_cl_correction(cascade_results, figures_dir)
     _fig_deviation_carter(cascade_results, figures_dir)
 
