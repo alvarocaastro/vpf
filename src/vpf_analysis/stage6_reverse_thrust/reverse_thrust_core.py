@@ -20,6 +20,7 @@ from vpf_analysis.stage6_reverse_thrust.core.domain.reverse_thrust_result import
 
 _G = 9.81
 _ALPHA_STALL_NEG_DEFAULT_DEG = -12.0
+_ALPHA_STALL_POS_DEFAULT_DEG = 16.0
 _SECTIONS = ["root", "mid_span", "tip"]
 
 # ---------------------------------------------------------------------------
@@ -168,22 +169,46 @@ def _get_aero_coeffs(
 
 
 def _stall_margin(alpha_rev_deg: float, polar_df: pd.DataFrame) -> float:
+    """Stall margin: distance to the nearest stall edge, normalized by |α_stall_neg|.
+
+    Positive  → operating safely between negative and positive stall.
+    Negative  → past either stall edge.
+    """
     df = polar_df.dropna(subset=["cl_kt", "alpha"]).sort_values("alpha")
+
+    # Negative stall: gradient sign change in the α ≤ 0 branch.
     neg_part = df[df["alpha"] <= 0]
     alpha_stall_neg = _ALPHA_STALL_NEG_DEFAULT_DEG
-    if len(neg_part) >= 3:
+    if len(neg_part) >= 5:
         cls = neg_part["cl_kt"].values
         alphas = neg_part["alpha"].values
-        # Smooth before differentiating to suppress XFOIL polar noise that
-        # creates spurious sign changes in the gradient.
-        cls_smooth = (
-            np.convolve(cls, np.ones(3) / 3.0, mode="same") if len(cls) >= 5 else cls
-        )
+        # Edge-replication padding: avoids the spurious sign change that
+        # zero-padding creates at the α ≈ 0 boundary.
+        cls_pad = np.concatenate([[cls[0]], cls, [cls[-1]]])
+        cls_smooth = np.convolve(cls_pad, np.ones(3) / 3.0, mode="valid")
         grads = np.diff(cls_smooth) / np.diff(alphas)
-        sign_changes = np.where(np.diff(np.sign(grads)))[0]
-        if len(sign_changes) > 0:
-            alpha_stall_neg = float(alphas[sign_changes[-1] + 1])
-    return float((alpha_stall_neg - alpha_rev_deg) / abs(alpha_stall_neg))
+        # Restrict the sign-change search to the interior so that residual
+        # one-point edge effects cannot fire a false detection.
+        if len(grads) >= 3:
+            interior = grads[1:-1]
+            sign_changes = np.where(np.diff(np.sign(interior)))[0]
+            if len(sign_changes) > 0:
+                alpha_stall_neg = float(alphas[sign_changes[-1] + 2])
+
+    # Positive stall: CL peak in the α ≥ 0 branch.
+    pos_part = df[df["alpha"] >= 0]
+    alpha_stall_pos = _ALPHA_STALL_POS_DEFAULT_DEG
+    if len(pos_part) >= 5:
+        cls_p = pos_part["cl_kt"].values
+        alphas_p = pos_part["alpha"].values
+        idx_max = int(np.argmax(cls_p))
+        if 0 < idx_max < len(cls_p) - 1:
+            alpha_stall_pos = float(alphas_p[idx_max])
+
+    norm = abs(alpha_stall_neg)
+    margin_neg = (alpha_rev_deg - alpha_stall_neg) / norm  # >0 if α > α_stall_neg
+    margin_pos = (alpha_stall_pos - alpha_rev_deg) / norm  # >0 if α < α_stall_pos
+    return float(min(margin_neg, margin_pos))
 
 
 def _bem_forces(

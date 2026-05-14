@@ -35,6 +35,9 @@ values when operating well above Mdd, where the 2-D inviscid model is invalid.
 _LOCK_VALID_MARGIN: float = 0.10
 """Maximum M − Mdd for which Lock's law is empirically validated."""
 
+_LOCK_WARNED_BUCKETS: set[int] = set()
+"""Rate-limit Lock's-law warnings: one per 0.05-wide bucket of M−Mdd."""
+
 
 def estimate_mdd(cl_operating: float, thickness_ratio: float, korn_kappa: float) -> float:
     """Drag-divergence Mach via Korn's equation: Mdd = κ - t/c - CL/10.
@@ -75,12 +78,15 @@ def wave_drag_increment(mach: float, mdd: float) -> float:
     if mach <= mdd:
         return 0.0
     delta_m = mach - mdd
+    cd_wave = min(_LOCK_COEFFICIENT * delta_m ** 4, _WAVE_DRAG_CAP)
     if delta_m > _LOCK_VALID_MARGIN:
-        LOGGER.warning(
-            "Lock's law outside validated range: M−Mdd = %.3f > %.2f. "
-            "Wave drag result (%.4f cd) is a saturated cap estimate, not a physical prediction. "
-            "Use shock-capturing CFD (RANS) for M−Mdd > 0.10.",
-            delta_m, _LOCK_VALID_MARGIN,
-            min(_LOCK_COEFFICIENT * delta_m ** 4, _WAVE_DRAG_CAP),
-        )
-    return min(_LOCK_COEFFICIENT * delta_m ** 4, _WAVE_DRAG_CAP)
+        bucket = int(delta_m * 20)  # 0.05-wide bucket index
+        if bucket not in _LOCK_WARNED_BUCKETS:
+            _LOCK_WARNED_BUCKETS.add(bucket)
+            LOGGER.warning(
+                "Lock's law outside validated range: M−Mdd ≈ %.2f > %.2f. "
+                "Wave drag (%.4f cd) is a saturated cap estimate, not a physical prediction. "
+                "Use shock-capturing CFD (RANS) for accurate transonic wave drag.",
+                delta_m, _LOCK_VALID_MARGIN, cd_wave,
+            )
+    return cd_wave
