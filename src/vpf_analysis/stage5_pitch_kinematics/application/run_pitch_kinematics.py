@@ -48,6 +48,7 @@ from vpf_analysis.config_loader import (
     get_blade_geometry,
     get_blade_radii,
     get_fan_rpm,
+    get_gear_ratio,
 )
 from vpf_analysis.shared.plot_style import FLIGHT_LABELS, SECTION_COLORS, SECTION_LABELS, apply_style
 from vpf_analysis.stage5_pitch_kinematics.adapters.filesystem.data_loader import (
@@ -1039,7 +1040,9 @@ def run_pitch_kinematics() -> None:
     radii        = get_blade_radii()
     axial_vels   = get_axial_velocities()
     rpm_map      = get_fan_rpm()
-    omega_map    = {cond: r * (2.0 * math.pi / 60.0) for cond, r in rpm_map.items()}
+    gear_ratio   = get_gear_ratio()
+    # Fan ω = ω_LPT / gear_ratio (PGB decouples fan from LPT shaft)
+    omega_map    = {cond: r * (2.0 * math.pi / 60.0) / gear_ratio for cond, r in rpm_map.items()}
     omega_cruise = omega_map.get("cruise", next(iter(omega_map.values())))
 
     # ── 3. [A] Cascade corrections ───────────────────────────────────────────
@@ -1080,6 +1083,7 @@ def run_pitch_kinematics() -> None:
     LOGGER.info("[B2] Computing 3D rotational corrections (Du-Selig 2000)...")
     rot_ds_results = compute_rotational_corrections_du_selig(
         df_cascade, blade_geom, alpha_opt_2d_map, cl_cd_max_2d_map,
+        gear_ratio=gear_ratio,
     )
     LOGGER.info("Du-Selig computed: %d cases", len(rot_ds_results))
 
@@ -1120,7 +1124,7 @@ def run_pitch_kinematics() -> None:
 
     # ── 7. Kinematics (velocity triangles with explicit Va) ───────────────────
     LOGGER.info("Solving velocity triangles...")
-    kinematics_results = compute_kinematics(pitch_adjustments, engine_config)
+    kinematics_results = compute_kinematics(pitch_adjustments, engine_config, gear_ratio=gear_ratio)
     LOGGER.info("Kinematics solved: %d cases", len(kinematics_results))
 
     # ── 8. [C] Design twist + off-design trade-off ───────────────────────────

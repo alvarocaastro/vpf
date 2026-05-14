@@ -87,6 +87,7 @@ from vpf_analysis.stage2_xfoil_simulations.final_analysis_service import (
     FinalAnalysisService,
     FinalSimulationConfig,
 )
+from vpf_analysis.config_loader import get_gear_ratio
 from vpf_analysis.stage2_xfoil_simulations.pitch_map import (
     compute_pitch_map,
     plot_alpha_opt_evolution,
@@ -410,6 +411,7 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
             cfg.fan.rpm,
             cfg.fan.radii_m,
             cfg.fan.axial_velocity_m_s,
+            gear_ratio=get_gear_ratio(),
         )
         save_pitch_map_csv(pitch_df, pitch_map_dir)
         plot_pitch_map(pitch_df, delta_beta, pitch_map_dir)

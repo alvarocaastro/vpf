@@ -313,3 +313,73 @@ published turbofan part-power data.
 ---
 
 *Generated: 2026-05-13 — VPF Technical Audit Implementation*
+
+---
+
+## UHBPR/GTF refactoring — 2026-05-14
+
+Evolved the engine model from GE9X-class HBPR (BPR=10, direct-drive, FPR=1.5) to a
+UHBPR Geared Turbofan (GTF) architecture (BPR=15, FPR=1.30, PGB gear_ratio=2.5),
+consistent with PW1000G/CFM LEAP-NG generation engines.
+
+### Configuration — `config/engine_parameters.yaml`
+- `bypass_ratio` 10 → 15; added `fan_pressure_ratio: 1.30`
+- Added `gear_ratio: 2.5` (planetary gearbox)
+- Added `hold` mission phase: Mach 0.5, 20 000 ft, 60 min, thrust_fraction=0.12
+- Added `sfc_multipliers.hold: 1.08`
+- `conventional_reverser_fraction` 0.057 → 0.095 (≈30 % nacelle mass / engine dry mass; Roskam Vol. V)
+- Added `fan_diameter_ref_m: 3.40`, `fan_diameter_uhbpr_m: 4.16` (D ∝ BPR^0.5, D = 3.40 × √(15/10))
+- Added through-feather effectiveness bounds 0.35–0.40 and flat-feather 0.20–0.30
+- Added `fleet_co2: {aircraft_count: 100, flights_per_day_per_aircraft: 2}`
+
+### `src/vpf_analysis/config_loader.py`
+- Added `get_gear_ratio()` — reads `gear_ratio` from YAML, defaults to 1.0
+- Added `get_fleet_co2_config()` — reads `fleet_co2` section from YAML
+
+### Stage 2 — `pitch_map.py` + `run_analysis.py`
+- `compute_pitch_map()` accepts `gear_ratio`; ω_fan = ω_LPT / gear_ratio
+- `run_analysis.py` reads `get_gear_ratio()` and passes it to `compute_pitch_map()`
+
+### Stage 3 — `correction_service.py`
+- Added WARNING log in `correct_case()` when M_rel_tip > 0.9: notes Kármán-Tsien
+  validity limit and that Lock's 4th-power wave drag extrapolation is applied
+
+### Stage 5 — `pitch_kinematics_core.py` + `run_pitch_kinematics.py`
+- All U = ω × r calculations divide ω by gear_ratio: affects
+  `compute_rotational_corrections_du_selig()` and `compute_kinematics()`
+- `run_pitch_kinematics.py` reads `gear_ratio` and propagates it; omega_map built
+  with `/ gear_ratio`
+
+### Stage 6 — `reverse_thrust_core.py` + `run_reverse_thrust.py`
+- `compute_mechanism_weight()` applies Raymer (2018) D^2.5 diameter scaling law:
+  `weight ∝ (D_uhbpr / D_ref)^2.5` when diameters are provided
+- Summary documents through-feather (VPF, 35–40 %) vs flat-feather (cascade TRU,
+  20–30 %) reversal effectiveness
+
+### Stage 7 — `sfc_core.py`
+- Added `_SEAL_LEAKAGE_PENALTY = 0.0075`: fixed-pitch baseline SFC multiplied by
+  (1 + 0.0075) to account for cascade reverser seal leakage (Butterfield et al.,
+  ASME GT2004-53713; Walsh & Fletcher §12.3)
+- Applied gear_ratio divisor to `_omega_cruise` and `_omega_cond` in φ calculations
+  so the fan map operating point is consistent with the PGB fan speed
+
+### Stage 7 — `run_sfc_analysis.py`
+- Synthesises a "hold" `SfcAnalysisResult` from the "climb" result scaled by the
+  hold SFC multiplier (1.08) so `compute_mission_fuel_burn()` covers all five phases
+- Added `_plot_efficiency_gain_map()`: grouped bar chart (BPR 10 + Fixed / BPR 10 +
+  VPF / BPR 15 + VPF) for each flight phase; BPR 10+VPF gain back-computed via
+  bypass sensitivity ratio k_BPR10/k_BPR15; saved as `figures/efficiency_gain_map.png`
+- Added annualised fleet CO₂ saving log: 100 aircraft × 2 flights/day × 365 days
+
+### Engine reference — `engine/engine_data.py`
+- `GE9X_PARAMS["BPR"]` 10.0 → 15.0; `GE9X_PARAMS["FPR"]` 1.5 → 1.30
+
+### Documentation — `README.md`
+- Title → *Análisis de un Fan de Paso Variable como Habilitador de Ciclos UHBPR
+  Engranados (GTF)*
+- Added paragraph: VPF enables FPR=1.30 without stall by adjusting blade pitch
+  in real time; without VPF, fixed pitch optimised for cruise leaves insufficient
+  stall margin at takeoff in UHBPR cycles
+- Reference configuration updated: BPR=15, FPR=1.30, D=4.16 m, PGB=2.5
+
+*Generated: 2026-05-14 — UHBPR/GTF Refactoring*

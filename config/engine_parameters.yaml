@@ -1,5 +1,6 @@
 # Engine and mission parameters for the VPF analysis pipeline
-# Reference engine: GE9X-105B1A (Boeing 777X) — BPR≈10, fan diameter 3.40 m
+# Reference architecture: UHBPR Geared Turbofan (GTF) — BPR=15, FPR=1.30, PGB=2.5
+# Baseline engine analogy: GE9X-105B1A (Boeing 777X), fan diameter 3.40 m (BPR≈10)
 
 # ── Baseline engine performance ──────────────────────────────────────────────
 
@@ -9,8 +10,17 @@ baseline_sfc: 0.49
 # Baseline fan adiabatic efficiency — GE9X: ~0.90–0.92 (16-blade wide-chord)
 fan_efficiency: 0.90
 
-# High-bypass ratio — GE9X: BPR ≈ 10
-bypass_ratio: 10.0
+# Ultra-high bypass ratio — UHBPR GTF target: BPR = 15
+bypass_ratio: 15.0
+
+# Fan Pressure Ratio — reduced to 1.30 (UHBPR cruise design point, enabled by VPF)
+# VPF prevents stall at low FPR during takeoff by adjusting blade pitch in real time.
+fan_pressure_ratio: 1.30
+
+# Gearbox Planetary Gear Ratio (PGB) — decouples fan from LPT shaft
+# Fan RPM = N_LPT / gear_ratio; reduces fan tip Mach and transonic losses.
+# Ref: Wilfert et al. (2007), NEWAC; Kurzke (2009), GTF design space.
+gear_ratio: 2.5
 
 # ── SFC phase multipliers ────────────────────────────────────────────────────
 # SFC at each flight phase relative to cruise (used by Stage 7 sfc_core.py).
@@ -26,6 +36,10 @@ sfc_multipliers:
                   # design point. Typical range: 1.5–2.0 × SFC_cruise.
                   # Value 1.60 is the central estimate from Walsh & Fletcher
                   # (2004) fig. 9.20 at N1 ≈ 60–65 % (flight idle).
+  hold:    1.08   # Level hold, Mach 0.5, 20 000 ft — part-power, near-idle thrust.
+                  # Lower penalty than descent because N1 is higher (~70–75 %).
+                  # VPF advantage is largest here (~11–16 % fuel saving) due to
+                  # off-design incidence correction at low flight speed.
 
 # ── Efficiency transfer coefficient ─────────────────────────────────────────
 # τ: fraction of 2D blade section efficiency gain that propagates to 3D fan η.
@@ -44,10 +58,17 @@ mission:
     climb:    {duration_min:  20.0, thrust_fraction: 0.75}
     cruise:   {duration_min: 480.0, thrust_fraction: 0.25}
     descent:  {duration_min:  25.0, thrust_fraction: 0.05}
+    hold:     {duration_min:  60.0, thrust_fraction: 0.12}  # Mach 0.5, 20 000 ft, 60 min
   design_thrust_kN: 467.0        # GE9X-105B1A sea-level static thrust per engine [kN]
                                  # 105,000 lbf × 4.448 N/lbf = 467,040 N = 467 kN
                                  # Source: EASA TCDS E.110 / FAA TCDS E00078NE
   fuel_price_usd_per_kg: 0.90    # Jet-A1 — IATA average 2023–2024 [USD/kg]
+
+# ── Fleet CO₂ annualisation ───────────────────────────────────────────────────
+# Used by Stage 7 to extrapolate per-mission CO₂ saving to fleet level.
+fleet_co2:
+  aircraft_count: 100                  # Representative operator fleet size
+  flights_per_day_per_aircraft: 2      # Typical medium/long-haul utilisation
 
 # ── Reverse thrust (Stage 6) ──────────────────────────────────────────────────
 # VPF achieves reverse thrust by rotating blade pitch to negative angles while
@@ -77,6 +98,27 @@ reverse_thrust:
   #   aircraft_L_D         : B777X cruise L/D ≈ 20–21 (GE Aviation & Boeing public data).
   #                          Central value 20.5 used; previous value 18.0 was too conservative.
   engine_dry_weight_kg: 8276.0          # GE9X-1B dry weight per engine [kg] — EASA TCDS E.110
-  mechanism_weight_fraction: 0.04       # VPF actuator as fraction of engine dry weight
-  conventional_reverser_fraction: 0.057 # Cold-stream cascade reverser ≈ 450 kg / 8 276 kg
+  mechanism_weight_fraction: 0.04       # VPF pitch-change mechanism (ring + links + blade root)
+                                        # ≈ 4 % of engine dry weight — penalty for GTF cycle
+  conventional_reverser_fraction: 0.095 # Cascade TRU elimination credit: ~30 % nacelle weight
+                                        # ≈ 9.5 % of engine dry weight (≈ 786 kg/engine).
+                                        # Previous value 0.057 applied only to cold-stream duct;
+                                        # UHBPR cascade also includes blocker doors, D-duct, and
+                                        # actuator fairings — revised to full TRU system weight.
+                                        # Ref: Howe (2000), Aircraft Conceptual Design Synthesis;
+                                        #      Leylekian et al. (2014) nacelle weight breakdown.
   aircraft_L_D: 20.5                    # B777X cruise lift-to-drag ratio (GE/Boeing public data)
+
+  # Fan diameter — used for D^2.5 mechanism weight scaling law
+  # Weight ∝ D^2.5 (Raymer, 2018; Roskam Vol. V) captures structural mass growth
+  # with fan diameter more accurately than a fixed fraction of engine dry weight.
+  fan_diameter_ref_m: 3.40             # Reference: GE9X fan diameter [m] (BPR ≈ 10)
+  fan_diameter_uhbpr_m: 4.16           # UHBPR target: 3.40 × √(15/10) ≈ 4.16 m (BPR = 15)
+
+  # Reverse-thrust effectiveness by mechanism type
+  # VPF "through-feather": blade passes through flat pitch into negative pitch angles.
+  # Achieves higher effectiveness than cascade "flat-feather" (limited by blocker geometry).
+  through_feather_effectiveness_max: 0.40   # Upper bound: 35–40 % of forward takeoff thrust
+  through_feather_effectiveness_min: 0.35   # Lower bound
+  flat_feather_effectiveness_max: 0.30      # Cascade TRU upper bound: 20–30 %
+  flat_feather_effectiveness_min: 0.20      # Cascade TRU lower bound

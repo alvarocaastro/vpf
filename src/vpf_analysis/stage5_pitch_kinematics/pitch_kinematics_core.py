@@ -349,6 +349,7 @@ def compute_rotational_corrections_du_selig(
     blade_geometry: dict,
     alpha_opt_2d_map: Dict[tuple, float],
     cl_cd_max_2d_map: Dict[tuple, float],
+    gear_ratio: float = 1.0,
 ) -> List[DuSeligCorrectionResult]:
     """Compute Du-Selig 3D corrections for each (condition, section)."""
     from vpf_analysis.config_loader import get_axial_velocities, get_blade_radii, get_fan_rpm
@@ -372,7 +373,8 @@ def compute_rotational_corrections_du_selig(
 
     for condition in conditions:
         va = va_map.get(condition, 150.0)
-        omega = rpm_map.get(condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0)
+        # Fan ω = ω_LPT / gear_ratio (PGB decouples fan from LPT shaft)
+        omega = rpm_map.get(condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0) / gear_ratio
         for section in sections:
             r = radii.get(section, float("nan"))
             sigma = solidities.get(section, 1.0)
@@ -867,6 +869,7 @@ def compute_kinematics(
     pitch_adjustments: List[PitchAdjustment],
     engine_config_path: Path,
     reference_condition: str = "cruise",
+    gear_ratio: float = 1.0,
 ) -> List[KinematicsResult]:
     """Compute velocity triangles and mechanical pitch angle for each case."""
     rpm_map = get_fan_rpm()
@@ -879,7 +882,8 @@ def compute_kinematics(
     for adj in pitch_adjustments:
         va = va_dict.get(adj.condition, float("nan"))
         r = radii.get(adj.section, float("nan"))
-        omega = rpm_map.get(adj.condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0)
+        # Fan ω = ω_LPT / gear_ratio (PGB decouples fan from LPT shaft)
+        omega = rpm_map.get(adj.condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0) / gear_ratio
         u = omega * r if not math.isnan(r) else float("nan")
         phi = math.degrees(math.atan2(va, u)) if (u > 0 and not math.isnan(va)) else 0.0
         beta = adj.alpha_opt + phi

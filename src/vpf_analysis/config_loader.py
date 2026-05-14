@@ -119,6 +119,26 @@ def get_blade_geometry() -> dict[str, Any]:
     }
 
 
+def get_gear_ratio() -> float:
+    """Gearbox planetary gear ratio from engine_parameters.yaml (1.0 = direct drive)."""
+    engine_cfg_path = base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
+    with engine_cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    return float(cfg.get("gear_ratio", 1.0))
+
+
+def get_fleet_co2_config() -> dict[str, Any]:
+    """Fleet CO₂ annualisation config from engine_parameters.yaml."""
+    engine_cfg_path = base_config.ROOT_DIR / "config" / "engine_parameters.yaml"
+    with engine_cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    fc = cfg.get("fleet_co2", {})
+    return {
+        "aircraft_count": int(fc.get("aircraft_count", 100)),
+        "flights_per_day_per_aircraft": int(fc.get("flights_per_day_per_aircraft", 2)),
+    }
+
+
 def get_mission_profile() -> dict[str, Any]:
     """Mission profile from engine_parameters.yaml: phases, design_thrust_kN, fuel_price."""
     engine_cfg_path = base_config.ROOT_DIR / "config" / "engine_parameters.yaml"

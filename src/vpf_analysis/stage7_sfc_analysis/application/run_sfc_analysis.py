@@ -48,8 +48,12 @@ from vpf_analysis.stage7_sfc_analysis.core.domain.sfc_parameters import (
     SfcSensitivityPoint,
 )
 from vpf_analysis.stage7_sfc_analysis.sfc_core import (
+    _SEAL_LEAKAGE_PENALTY,
+    compute_bypass_sensitivity_factor,
     compute_mission_fuel_burn,
     compute_sfc_analysis,
+    compute_sfc_improvement,
+    compute_sfc_reduction_percent,
     compute_sfc_sensitivity,
     generate_sfc_summary,
 )
@@ -76,10 +80,11 @@ def generate_sfc_figures(
     mission_phase_results: List[MissionFuelBurnResult] | None = None,
     mission_summary: MissionSummary | None = None,
 ) -> None:
-    """Generate the essential Stage 7 figure."""
+    """Generate the essential Stage 7 figures."""
     figures_dir.mkdir(parents=True, exist_ok=True)
     with apply_style():
         _plot_fixed_vs_vpf_efficiency(section_results, figures_dir)
+        _plot_efficiency_gain_map(sfc_results, figures_dir)
 
 
 def _plot_fixed_vs_vpf_efficiency(
@@ -120,6 +125,62 @@ def _plot_fixed_vs_vpf_efficiency(
     )
     fig.tight_layout()
     fig.savefig(figures_dir / "sfc_improvement_by_condition.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_efficiency_gain_map(
+    sfc_results: List[SfcAnalysisResult],
+    figures_dir: Path,
+) -> None:
+    """Grouped bars: BPR10+Fixed vs BPR10+VPF vs BPR15+VPF for each flight phase.
+
+    BPR10+VPF gain is back-computed from BPR15+VPF by the bypass sensitivity ratio
+    k_BPR10/k_BPR15 so that only one pipeline run is needed.
+    Saved as ``efficiency_gain_map.png``.
+    """
+    k_bpr10 = compute_bypass_sensitivity_factor(10.0)
+    k_bpr15 = compute_bypass_sensitivity_factor(15.0)
+
+    flight_conditions = [c for c in _CONDITIONS_ORDER if any(r.condition == c for r in sfc_results)]
+    labels = [FLIGHT_LABELS.get(c, c.capitalize()) for c in flight_conditions]
+
+    gain_vpf_bpr10: list[float] = []
+    gain_vpf_bpr15: list[float] = []
+    for cond in flight_conditions:
+        res = next((r for r in sfc_results if r.condition == cond), None)
+        if res is None:
+            gain_vpf_bpr10.append(0.0)
+            gain_vpf_bpr15.append(0.0)
+        else:
+            g15 = res.sfc_reduction_percent
+            g10 = g15 * (k_bpr10 / k_bpr15)
+            gain_vpf_bpr10.append(g10)
+            gain_vpf_bpr15.append(g15)
+
+    x = np.arange(len(flight_conditions))
+    w = 0.25
+
+    fig, ax = plt.subplots(figsize=(8.0, 5.0))
+    ax.bar(x - w, [0.0] * len(flight_conditions), w,
+           label="BPR 10 + Fixed pitch (reference)",
+           color="#BBBBBB", edgecolor="white", linewidth=0.5, zorder=3)
+    bars_b10 = ax.bar(x, gain_vpf_bpr10, w,
+                      label="BPR 10 + VPF",
+                      color="#4477AA", edgecolor="white", linewidth=0.5, zorder=3)
+    bars_b15 = ax.bar(x + w, gain_vpf_bpr15, w,
+                      label="BPR 15 + VPF (UHBPR/GTF)",
+                      color="#228833", edgecolor="white", linewidth=0.5, zorder=3)
+
+    ax.bar_label(bars_b10, fmt="%.2f%%", padding=3, fontsize=7)
+    ax.bar_label(bars_b15, fmt="%.2f%%", padding=3, fontsize=7)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("SFC reduction vs BPR 10 Fixed pitch [%]")
+    ax.set_title("VPF efficiency gain map: BPR scaling and variable-pitch fan benefit")
+    ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
+    ax.grid(axis="y", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(figures_dir / "efficiency_gain_map.png", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -290,6 +351,34 @@ def run_sfc_analysis() -> None:
     )
     LOGGER.info("SFC analysis: %d conditions, %d sections", len(sfc_results), len(section_results))
 
+    # Synthesise "hold" SfcAnalysisResult from "climb" (nearest Mach regime)
+    # so compute_mission_fuel_burn() finds an entry for the hold phase.
+    import dataclasses as _dc
+    hold_phase_cfg = _cfg.get("mission", {}).get("phases", {}).get("hold", {})
+    if hold_phase_cfg and not any(r.condition == "hold" for r in sfc_results):
+        _climb = next((r for r in sfc_results if r.condition == "climb"), None)
+        if _climb is not None:
+            _hold_mult = _cfg.get("sfc_multipliers", {}).get("hold", 1.08)
+            _hold_sfc_base = engine_baseline.baseline_sfc * _hold_mult * (1.0 + _SEAL_LEAKAGE_PENALTY)
+            _hold_sfc_new  = compute_sfc_improvement(
+                sfc_baseline=_hold_sfc_base,
+                delta_eta_fan=_climb.delta_eta_fan,
+                eta_fan_baseline=engine_baseline.fan_efficiency,
+                k=_climb.k_sensitivity,
+            )
+            _hold_reduction = compute_sfc_reduction_percent(_hold_sfc_base, _hold_sfc_new)
+            sfc_results.append(_dc.replace(
+                _climb,
+                condition="hold",
+                sfc_baseline=_hold_sfc_base,
+                sfc_new=_hold_sfc_new,
+                sfc_reduction_percent=_hold_reduction,
+            ))
+            LOGGER.info(
+                "Hold phase synthesised from climb: SFC_base=%.4f, reduction=%.2f%%",
+                _hold_sfc_base, _hold_reduction,
+            )
+
     # ── 4. Sensitivity analysis to τ ─────────────────────────────────────
     sensitivity_results = compute_sfc_sensitivity(
         metrics_df, engine_baseline, config_path=engine_config_path,
@@ -314,6 +403,23 @@ def run_sfc_analysis() -> None:
         LOGGER.warning("Mission analysis not available: %s", exc)
         mission_summary = None
         mission_phase_results = []
+
+    # ── Fleet CO₂ annualization ──────────────────────────────────────────
+    if mission_summary is not None:
+        try:
+            from vpf_analysis.config_loader import get_fleet_co2_config
+            fleet_cfg = get_fleet_co2_config()
+            n_aircraft  = fleet_cfg.get("aircraft_count", 100)
+            flights_day = fleet_cfg.get("flights_per_day_per_aircraft", 2)
+            annual_co2_saving_t = (
+                mission_summary.total_co2_saving_kg * n_aircraft * flights_day * 365 / 1000
+            )
+            LOGGER.info(
+                "Ahorro CO₂ anualizado (flota %d aviones): %.0f t/año",
+                n_aircraft, annual_co2_saving_t,
+            )
+        except Exception as exc:
+            LOGGER.warning("Fleet CO2 calculation not available: %s", exc)
 
     # ── 6. Figures ───────────────────────────────────────────────────────
     generate_sfc_figures(

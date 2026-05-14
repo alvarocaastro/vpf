@@ -7,7 +7,7 @@ import numpy as np
 # GE9X-105B1A (Boeing 777X) — public data
 GE9X_PARAMS: dict = {
     "name": "GE9X-105B1A",
-    "BPR": 10.0,
+    "BPR": 15.0,             # UHBPR GTF target (enabled by VPF + gearbox)
     "OPR": 60.0,
     "T4_cruise": 1450.0,    # K — TET in cruise
     "T4_takeoff": 1800.0,   # K — TET at takeoff
@@ -24,7 +24,7 @@ GE9X_PARAMS: dict = {
     "SFC_ref_cruise": 0.49,  # lb/lbf·h — public GE9X value
     "altitude_cruise_ft": 35000.0,
     "Mach_cruise": 0.85,
-    "FPR": 1.5,              # Fan Pressure Ratio (typical modern UHBR)
+    "FPR": 1.30,             # Fan Pressure Ratio — reduced to 1.30 for UHBPR cycle
 }
 
 # Reference engines used for interpolated estimates

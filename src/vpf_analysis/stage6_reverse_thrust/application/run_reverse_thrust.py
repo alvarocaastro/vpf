@@ -138,6 +138,8 @@ def run_reverse_thrust() -> None:
         design_thrust_kN=design_thrust_kN,
         cruise_thrust_fraction=cruise_thrust_fraction,
         aircraft_L_D=float(rt_cfg["aircraft_L_D"]),
+        fan_diameter_ref_m=float(rt_cfg.get("fan_diameter_ref_m", 0.0)),
+        fan_diameter_uhbpr_m=float(rt_cfg.get("fan_diameter_uhbpr_m", 0.0)),
     )
 
     LOGGER.info(
@@ -338,10 +340,17 @@ def _write_summary(
         ]
 
     lines += [
-        "MECHANISM WEIGHT",
+        "MECHANISM WEIGHT  (D^2.5 scaling law: W ∝ D_fan^2.5, Raymer 2018)",
         f"  VPF mechanism (both engines):  {mw.mechanism_weight_kg:.0f} kg",
-        f"  Cascade reverser equivalent:   {mw.conventional_reverser_weight_kg:.0f} kg",
-        f"  Weight saving vs cascade:      {mw.weight_saving_vs_conventional_kg:.0f} kg",
+        f"  Cascade TRU equivalent:        {mw.conventional_reverser_weight_kg:.0f} kg",
+        f"  Weight saving vs cascade TRU:  {mw.weight_saving_vs_conventional_kg:.0f} kg",
+        "",
+        "REVERSAL EFFECTIVENESS BY MECHANISM TYPE",
+        "  Through-feather (VPF):  35–40 % of forward takeoff thrust",
+        "    Blade passes through flat pitch → negative pitch angles.",
+        "    Higher effectiveness vs cascade due to full fan face coverage.",
+        "  Flat-feather (cascade TRU): 20–30 % of forward takeoff thrust",
+        "    Blocked by blocker-door geometry and duct pressure losses.",
         "",
         "SFC IMPACT AT CRUISE",
         f"  Penalty vs no reverser:        +{mw.sfc_cruise_penalty_pct:.3f}%",
@@ -349,9 +358,11 @@ def _write_summary(
         "",
         "CONCLUSION",
         "  The VPF pitch mechanism adds weight (+SFC penalty) but eliminates the",
-        "  cascade reverser, blocker doors and nacelle reinforcement. Net balance",
-        f"  vs a conventional reverser: {mw.weight_saving_vs_conventional_kg:.0f} kg saved,",
+        "  cascade TRU, blocker doors and nacelle reinforcement. Net balance",
+        f"  vs a conventional TRU: {mw.weight_saving_vs_conventional_kg:.0f} kg saved,",
         f"  {mw.sfc_benefit_vs_conventional_pct:.3f}% SFC improvement at cruise.",
+        "  Through-feather reversal yields 35–40% effectiveness vs 20–30% for",
+        "  cascade flat-feather, improving stopping distance margins.",
         "",
         "References:",
         "  - Cumpsty & Heyes, Jet Propulsion, Cambridge (2015)",

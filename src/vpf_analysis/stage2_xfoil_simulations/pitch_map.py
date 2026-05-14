@@ -33,6 +33,7 @@ def compute_pitch_map(
     rpm: Dict[str, float],
     radii: Dict[str, float],
     axial_velocities: Dict[str, float],
+    gear_ratio: float = 1.0,
 ) -> Tuple[pd.DataFrame, Dict[str, float]]:
     """
     Compute required blade pitch angle beta for each (flight, section) condition.
@@ -40,9 +41,11 @@ def compute_pitch_map(
     Parameters
     ----------
     alpha_eff_map : dict mapping (flight_name, section_name) -> alpha_opt [deg]
-    rpm : fan rotational speed [RPM] per flight condition
+    rpm : LPT rotational speed [RPM] per flight condition
     radii : dict section_name -> radius [m]
     axial_velocities : dict flight_name -> axial velocity Va [m/s]
+    gear_ratio : planetary gearbox ratio (fan RPM = LPT RPM / gear_ratio).
+        Set to 1.0 for direct-drive fans (default).
 
     Returns
     -------
@@ -57,8 +60,9 @@ def compute_pitch_map(
         va = axial_velocities.get(flight)
         if r is None or va is None:
             continue
-        omega = 2.0 * math.pi * rpm.get(flight, next(iter(rpm.values()))) / 60.0
-        u = omega * r                            # blade speed [m/s]
+        # Fan angular velocity accounts for PGB: ω_fan = ω_LPT / gear_ratio
+        omega = 2.0 * math.pi * rpm.get(flight, next(iter(rpm.values()))) / (60.0 * gear_ratio)
+        u = omega * r                            # fan blade speed [m/s]
         phi_rad = math.atan2(va, u)              # flow angle [rad]
         phi_deg = math.degrees(phi_rad)          # flow angle [deg]
         beta_deg = alpha_opt + phi_deg           # required pitch [deg]

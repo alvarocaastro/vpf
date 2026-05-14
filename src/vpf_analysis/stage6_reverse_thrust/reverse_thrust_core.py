@@ -356,10 +356,29 @@ def compute_mechanism_weight(
     cruise_thrust_fraction: float,
     aircraft_L_D: float,
     n_engines: int = 2,
+    fan_diameter_ref_m: float = 0.0,
+    fan_diameter_uhbpr_m: float = 0.0,
 ) -> MechanismWeightResult:
-    """Compute VPF mechanism weight and its cruise SFC impact."""
-    mechanism_weight_kg = n_engines * engine_dry_weight_kg * mechanism_weight_fraction
-    conventional_weight_kg = n_engines * engine_dry_weight_kg * conventional_reverser_fraction
+    """Compute VPF mechanism weight and its cruise SFC impact.
+
+    Weight scaling law:  W ∝ D_fan^2.5  (Raymer 2018; Roskam Vol. V).
+    When ``fan_diameter_uhbpr_m`` > 0 and differs from ``fan_diameter_ref_m``,
+    both the VPF mechanism weight and the conventional TRU weight are scaled to
+    the UHBPR fan diameter.  If diameters are not provided (zeros), the legacy
+    fraction-of-dry-weight approach is used unchanged.
+    """
+    # D^2.5 scaling factor (1.0 if diameters not provided or unchanged)
+    if fan_diameter_ref_m > 0 and fan_diameter_uhbpr_m > 0:
+        d_scale = (fan_diameter_uhbpr_m / fan_diameter_ref_m) ** 2.5
+        LOGGER.info(
+            "D^2.5 weight scaling: D_ref=%.2f m, D_UHBPR=%.2f m → factor=%.4f",
+            fan_diameter_ref_m, fan_diameter_uhbpr_m, d_scale,
+        )
+    else:
+        d_scale = 1.0
+
+    mechanism_weight_kg = n_engines * engine_dry_weight_kg * mechanism_weight_fraction * d_scale
+    conventional_weight_kg = n_engines * engine_dry_weight_kg * conventional_reverser_fraction * d_scale
     weight_saving_kg = conventional_weight_kg - mechanism_weight_kg
 
     t_cruise_total_N = n_engines * design_thrust_kN * 1000.0 * cruise_thrust_fraction

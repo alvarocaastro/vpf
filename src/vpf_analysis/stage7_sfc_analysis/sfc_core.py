@@ -31,6 +31,10 @@ LOGGER = logging.getLogger(__name__)
 
 _DEFAULT_TAU_VALUES: List[float] = [0.30, 0.37, 0.43, 0.50, 0.57, 0.65, 0.73, 0.80]
 
+# Cascade reverser seal leakage adds ~0.75% SFC to the fixed-pitch baseline
+# (Butterfield et al., ASME GT2004-53713; Walsh & Fletcher, §12.3)
+_SEAL_LEAKAGE_PENALTY: float = 0.0075
+
 # ---------------------------------------------------------------------------
 # Propulsion model (propulsion_model_service)
 # ---------------------------------------------------------------------------
@@ -205,11 +209,12 @@ def compute_sfc_analysis(
     flight_conditions = get_flight_conditions()
 
     try:
-        from vpf_analysis.config_loader import get_axial_velocities, get_blade_radii, get_fan_rpm
+        from vpf_analysis.config_loader import get_axial_velocities, get_blade_radii, get_fan_rpm, get_gear_ratio
         _va = get_axial_velocities()
         _radii = get_blade_radii()
         _rpm_map = get_fan_rpm()
-        _omega_cruise = _rpm_map.get("cruise", next(iter(_rpm_map.values()))) * (2.0 * _math.pi / 60.0)
+        _gear_ratio = get_gear_ratio()
+        _omega_cruise = _rpm_map.get("cruise", next(iter(_rpm_map.values()))) * (2.0 * _math.pi / 60.0) / _gear_ratio
         _use_map = True
         _va_cruise = _va.get("cruise", 150.0)
         _phi_design: dict = {sec: _va_cruise / (_omega_cruise * r) for sec, r in _radii.items()}
@@ -257,7 +262,7 @@ def compute_sfc_analysis(
                 phi_cond = phi_des
                 delta_eta_map = 0.0
             elif _use_map and section in _radii and _omega_cruise > 0:
-                _omega_cond = _rpm_map.get(condition, next(iter(_rpm_map.values()), 0.0)) * (2.0 * _math.pi / 60.0) if _rpm_map else _omega_cruise
+                _omega_cond = _rpm_map.get(condition, next(iter(_rpm_map.values()), 0.0)) * (2.0 * _math.pi / 60.0) / _gear_ratio if _rpm_map else _omega_cruise
                 u_sec = _omega_cond * _radii[section]
                 phi_cond = _va_cond / u_sec if u_sec > 0 else float("nan")
                 phi_des = _phi_design.get(section, float("nan"))
@@ -316,7 +321,7 @@ def compute_sfc_analysis(
         )
 
         sfc_multiplier = sfc_multipliers.get(condition, 1.0)
-        sfc_baseline = engine_baseline.baseline_sfc * sfc_multiplier
+        sfc_baseline = engine_baseline.baseline_sfc * sfc_multiplier * (1.0 + _SEAL_LEAKAGE_PENALTY)
         sfc_new = compute_sfc_improvement(
             sfc_baseline=sfc_baseline,
             delta_eta_fan=delta_eta_applied,

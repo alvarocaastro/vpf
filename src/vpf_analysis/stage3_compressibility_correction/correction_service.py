@@ -7,8 +7,13 @@ corrections, and writes corrected CSVs to stage3 with a canonical
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
+
+_LOGGER = logging.getLogger(__name__)
+
+_M_REL_TIP_WARN = 0.9  # Kármán-Tsien validity limit for tip section
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -61,6 +66,15 @@ class CompressibilityCorrectionService:
         """Apply PG + K-T corrections to one polar file."""
         if not input_polar_path.is_file():
             raise FileNotFoundError(f"Polar file not found: {input_polar_path}")
+
+        if section == "tip" and case.target_mach > _M_REL_TIP_WARN:
+            _LOGGER.warning(
+                "M_rel_tip=%.3f > %.1f at %s/tip — Kármán-Tsien correction applied; "
+                "wave drag extrapolated via Lock's 4th-power law. "
+                "XFOIL underestimates CD in locally supersonic flow: "
+                "Lock complement is necessary for wave drag accuracy.",
+                case.target_mach, _M_REL_TIP_WARN, case.flight_condition,
+            )
 
         df_original = self._trim_post_stall_alpha(pd.read_csv(input_polar_path))
 
