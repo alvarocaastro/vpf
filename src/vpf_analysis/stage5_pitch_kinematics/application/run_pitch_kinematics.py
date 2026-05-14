@@ -448,96 +448,6 @@ def _fig_pitch_compromise_loss(
 # D — Stage loading figures
 # ---------------------------------------------------------------------------
 
-def _fig_phi_psi_map(
-    loading_ideal: List[StageLoadingResult],
-    figures_dir: Path,
-    loading_actual: List[StageLoadingResult] | None = None,
-) -> None:
-    """φ-ψ diagram with operating points and design zone.
-
-    If `loading_actual` is provided, both scenarios are plotted:
-      - `loading_ideal`  (ideal pitch per condition): filled marker
-      - `loading_actual` (single actuator, fixed β_metal): hollow marker
-    A short arrow connects each pair to show the displacement.
-    """
-    fig, ax = plt.subplots(figsize=(7.5, 6.0))
-
-    # Fixed-pitch fan design zone (Dixon & Hall, 2013)
-    ax.axvspan(0.35, 0.55, alpha=0.10, color="#4CAF50")
-    ax.axhspan(0.25, 0.50, alpha=0.10, color="#4CAF50")
-    ax.fill_betweenx([0.25, 0.50], 0.35, 0.55, alpha=0.18, color="#4CAF50",
-                     label="Fixed-pitch fan zone (Dixon & Hall, 2013)")
-
-    marker_map = {"takeoff": "o", "climb": "s", "cruise": "^", "descent": "D"}
-
-    # Index by (condition, section) to pair ideal ↔ actual
-    actual_by_key = {
-        (r.condition, r.section): r for r in (loading_actual or [])
-    }
-
-    for res in loading_ideal:
-        if math.isnan(res.phi_coeff) or math.isnan(res.psi_loading):
-            continue
-        color = SECTION_COLORS.get(res.section, "gray")
-        marker = marker_map.get(res.condition, "o")
-
-        # Ideal point (filled)
-        ax.scatter(res.phi_coeff, res.psi_loading,
-                   s=120, color=color, marker=marker,
-                   edgecolors="white", linewidths=0.8, zorder=5)
-        ax.annotate(
-            f"{res.condition[:2].title()}/{res.section[:3]}",
-            (res.phi_coeff, res.psi_loading),
-            xytext=(5, 4), textcoords="offset points", fontsize=7,
-        )
-
-        # Actual point (hollow) and arrow ideal → actual
-        act = actual_by_key.get((res.condition, res.section))
-        if act and not (math.isnan(act.phi_coeff) or math.isnan(act.psi_loading)):
-            same_point = (
-                abs(act.phi_coeff - res.phi_coeff) < 1e-6
-                and abs(act.psi_loading - res.psi_loading) < 1e-6
-            )
-            ax.scatter(act.phi_coeff, act.psi_loading,
-                       s=120, facecolors="none", edgecolors=color, marker=marker,
-                       linewidths=1.6, zorder=5)
-            if not same_point:
-                ax.annotate(
-                    "", xy=(act.phi_coeff, act.psi_loading),
-                    xytext=(res.phi_coeff, res.psi_loading),
-                    arrowprops=dict(arrowstyle="->", color=color, lw=0.8,
-                                    alpha=0.6, shrinkA=4, shrinkB=4),
-                )
-
-    # Manual legend entries
-    from matplotlib.lines import Line2D
-    handles = [
-        Line2D([0], [0], marker="o", color="w", markerfacecolor=SECTION_COLORS["root"],
-               markersize=9, label=SECTION_LABELS["root"]),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor=SECTION_COLORS["mid_span"],
-               markersize=9, label=SECTION_LABELS["mid_span"]),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor=SECTION_COLORS["tip"],
-               markersize=9, label=SECTION_LABELS["tip"]),
-        Line2D([0], [0], color="#4CAF50", lw=8, alpha=0.35, label="Design zone"),
-    ]
-    if loading_actual:
-        handles += [
-            Line2D([0], [0], marker="o", color="w", markerfacecolor="gray",
-                   markersize=9, label="Ideal (free pitch per condition)"),
-            Line2D([0], [0], marker="o", color="gray", markerfacecolor="none",
-                   markersize=9, markeredgewidth=1.6, label="Real (single actuator)"),
-        ]
-    ax.legend(handles=handles, loc="center left", bbox_to_anchor=(1.02, 0.5),
-              fontsize=8, frameon=True)
-    ax.set_xlabel(r"Flow coefficient $\phi = V_a/U$ [—]")
-    ax.set_ylabel(r"Work coefficient $\psi = \Delta V_\theta/U$ [—]")
-    subtitle = ("(design zone: fixed-pitch fan at target PR — "
-                "a VPF at α_opt operates below ψ to gain $C_L/C_D$)")
-    ax.set_title("Stage loading map — VPF operating points\n" + subtitle, pad=8)
-    fig.tight_layout()
-    fig.savefig(figures_dir / "phi_psi_operating_map.png")
-    plt.close(fig)
-
 
 def _fig_work_distribution(
     loading: List[StageLoadingResult],
@@ -1194,7 +1104,6 @@ def run_pitch_kinematics() -> None:
     _fig_pitch_compromise_loss(off_design_results, figures_dir)
 
     # Carga de etapa
-    _fig_phi_psi_map(loading_results, figures_dir, loading_actual=loading_actual_results)
     _fig_work_distribution(loading_results, figures_dir)
     _fig_loading_profile_spanwise(loading_results, figures_dir)
 
