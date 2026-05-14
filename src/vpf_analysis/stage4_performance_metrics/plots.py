@@ -86,8 +86,13 @@ def _smart_annotation(
     x_range: float,
     y_range: float,
 ) -> None:
-    dx = 0.06 * x_range
-    dy = 0.06 * y_range
+    x_lo, x_hi = ax.get_xlim()
+    y_lo, y_hi = ax.get_ylim()
+    # Offset away from whichever edge the point is near (threshold: 65 % / 75 %)
+    x_frac = (x - x_lo) / max(x_hi - x_lo, 1e-9)
+    y_frac = (y - y_lo) / max(y_hi - y_lo, 1e-9)
+    dx = 0.06 * x_range * (1.0 if x_frac <= 0.65 else -1.0)
+    dy = 0.06 * y_range * (1.0 if y_frac <= 0.75 else -1.0)
     ax.annotate(
         label, xy=(x, y), xytext=(x + dx, y + dy),
         arrowprops=dict(arrowstyle="->", color="#B22222", lw=1.2),
@@ -165,7 +170,7 @@ def plot_efficiency_penalty_overview(
                     ax.annotate(
                         f"$\\Delta\\alpha$={d_alpha:.1f}°\n$\\Delta$(CL/CD)={d_eff:.1f}",
                         xy=(alpha_design, eff_fixed),
-                        xytext=(alpha_design - 1.2, eff_fixed + 4),
+                        xytext=(-32, 22), textcoords="offset points",
                         fontsize=7.5,
                         color=color,
                         arrowprops=dict(arrowstyle="-", color=color, lw=0.8),
@@ -230,9 +235,20 @@ def generate_efficiency_plots(
                 alpha_opt = float("nan")
                 ld_max = float("nan")
 
+            # Clean inf/nan so the plotted curve matches what find_second_peak_row sees
+            df_plot = (
+                df[["alpha", eff_col]]
+                .replace([np.inf, -np.inf], np.nan)
+                .dropna()
+                .sort_values("alpha")
+            )
+            df_plot = df_plot[
+                (df_plot["alpha"] >= _ALPHA_MIN) & (df_plot["alpha"] <= _ALPHA_MAX)
+            ]
+
             fig, ax = plt.subplots(figsize=(w, h))
             color = SECTION_COLORS.get(section, "#2166AC")
-            ax.plot(df["alpha"], df[eff_col], color=color, label=r"$C_L/C_D$", zorder=3)
+            ax.plot(df_plot["alpha"], df_plot[eff_col], color=color, label=r"$C_L/C_D$", zorder=3)
 
             if has_opt:
                 ax.plot(
@@ -243,11 +259,12 @@ def generate_efficiency_plots(
                 )
                 ax.axvline(alpha_opt, color="#B22222", linestyle="--",
                            linewidth=0.9, alpha=0.75, zorder=4)
-                alpha_range = float(df["alpha"].max() - df["alpha"].min())
+                alpha_range = float(
+                    df_plot["alpha"].max() - df_plot["alpha"].min()
+                ) if not df_plot.empty else 1.0
                 ld_range = float(
-                    df[eff_col].replace([np.inf, -np.inf], np.nan).dropna().max()
-                    - df[eff_col].replace([np.inf, -np.inf], np.nan).dropna().min()
-                )
+                    df_plot[eff_col].max() - df_plot[eff_col].min()
+                ) if not df_plot.empty else 1.0
                 _smart_annotation(
                     ax, alpha_opt, ld_max,
                     rf"$\alpha_{{opt}}$ = {alpha_opt:.1f}°",
@@ -316,7 +333,14 @@ def generate_section_polar_comparison(
                 if has_opt else section_label
             )
 
-            ax_eff.plot(df["alpha"], df[eff_col], color=color, label=legend_lbl, zorder=3)
+            # Clean efficiency data so the plotted curve matches find_second_peak_row
+            df_eff_plot = (
+                df[["alpha", eff_col]]
+                .replace([np.inf, -np.inf], np.nan)
+                .dropna()
+                .sort_values("alpha")
+            )
+            ax_eff.plot(df_eff_plot["alpha"], df_eff_plot[eff_col], color=color, label=legend_lbl, zorder=3)
             if has_opt:
                 ax_eff.plot(
                     alpha_opt, ld_opt, marker="*", color=color, markersize=11,

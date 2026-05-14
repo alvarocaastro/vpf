@@ -161,9 +161,9 @@ def _plot_efficiency_gain_map(
     w = 0.25
 
     fig, ax = plt.subplots(figsize=(8.0, 5.0))
-    ax.bar(x - w, [0.0] * len(flight_conditions), w,
-           label="BPR 10 + Fixed pitch (reference)",
-           color="#BBBBBB", edgecolor="white", linewidth=0.5, zorder=3)
+    bars_ref = ax.bar(x - w, [0.0] * len(flight_conditions), w,
+                      label="BPR 10 + Fixed pitch (reference)",
+                      color="#BBBBBB", edgecolor="white", linewidth=0.5, zorder=3)
     bars_b10 = ax.bar(x, gain_vpf_bpr10, w,
                       label="BPR 10 + VPF",
                       color="#4477AA", edgecolor="white", linewidth=0.5, zorder=3)
@@ -171,8 +171,19 @@ def _plot_efficiency_gain_map(
                       label="BPR 15 + VPF (UHBPR/GTF)",
                       color="#228833", edgecolor="white", linewidth=0.5, zorder=3)
 
-    ax.bar_label(bars_b10, fmt="%.2f%%", padding=3, fontsize=7)
-    ax.bar_label(bars_b15, fmt="%.2f%%", padding=3, fontsize=7)
+    # Reference bars are always 0 % — label them so the baseline is visible
+    ax.bar_label(bars_ref, fmt="%.2f%%", padding=3, fontsize=7)
+    # Non-reference bars: only label when the gain is non-trivial to avoid
+    # overlapping "0.00%0.00%" labels at cruise (the reference condition)
+    for bars, values in [(bars_b10, gain_vpf_bpr10), (bars_b15, gain_vpf_bpr15)]:
+        for bar, val in zip(bars, values):
+            if abs(val) > 0.005:
+                ax.annotate(
+                    f"{val:.2f}%",
+                    xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                    xytext=(0, 3), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=7,
+                )
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylabel("SFC reduction vs BPR 10 Fixed pitch [%]")

@@ -623,10 +623,18 @@ def _fig_efficiency_curves(
             color = SECTION_COLORS[section]
             ax.plot(df_3d["alpha"], df_3d["ld_3d"],
                     color=color, label=SECTION_LABELS.get(section, section), zorder=3)
-            alpha_opt = alpha_opt_3d_map.get((condition, section), float("nan"))
-            ld_max    = cl_cd_max_3d_map.get((condition, section), float("nan"))
-            if not math.isnan(alpha_opt) and not math.isnan(ld_max):
-                ax.plot(alpha_opt, ld_max, marker="*", color=color,
+            # Re-derive star from the actual plotted ld_3d column so it sits
+            # exactly at the visual peak (pre-computed map may come from a
+            # slightly different pipeline step)
+            ld_3d_clean = df_3d["ld_3d"].replace([np.inf, -np.inf], np.nan)
+            valid_mask = (df_3d["alpha"] >= 0.0) & ld_3d_clean.notna()
+            if not valid_mask.any():
+                valid_mask = ld_3d_clean.notna()
+            if valid_mask.any():
+                idx_star = ld_3d_clean[valid_mask].idxmax()
+                alpha_star = float(df_3d.loc[idx_star, "alpha"])
+                ld_star = float(ld_3d_clean.loc[idx_star])
+                ax.plot(alpha_star, ld_star, marker="*", color=color,
                         markersize=13, markeredgecolor="white", markeredgewidth=0.6,
                         zorder=5, linestyle="none")
 
