@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from vpf_analysis import settings as base_config
+from vpf_analysis.settings import _isa_atmosphere
 
 _CONFIG_CACHE: dict[str, Any] | None = None
 
@@ -26,13 +28,91 @@ def load_config(config_path: Path | None = None) -> dict[str, Any]:
     return _CONFIG_CACHE
 
 
-def get_reynolds_table() -> dict[str, dict[str, float]]:
-    """Reynolds numbers per (flight condition, blade section)."""
+# ── Non-dimensional fan geometry accessors ────────────────────────────────────
+
+def get_M_tip_design() -> dict[str, float]:
+    """Tip Mach number U_tip/a per flight condition."""
+    return {k: float(v) for k, v in load_config()["fan_geometry"]["M_tip_design"].items()}
+
+
+def get_phi_design() -> dict[str, float]:
+    """Flow coefficient φ = Va/(ω·r_tip) per flight condition."""
+    return {k: float(v) for k, v in load_config()["fan_geometry"]["phi_design"].items()}
+
+
+def get_r_rel() -> dict[str, float]:
+    """Non-dimensional blade radii r/r_tip per section."""
+    return {k: float(v) for k, v in load_config()["fan_geometry"]["r_rel"].items()}
+
+
+def get_r_tip_m() -> float:
+    """Tip radius [m] — sole dimensional anchor."""
+    return float(load_config()["fan_geometry"]["r_tip_m"])
+
+
+def get_hub_to_tip_ratio() -> float:
+    """Hub-to-tip radius ratio r_hub/r_tip."""
+    return float(load_config()["fan_geometry"]["hub_to_tip_ratio"])
+
+
+def get_altitude_m() -> dict[str, float]:
+    """ISA pressure altitude [m] per flight condition."""
+    return {k: float(v) for k, v in load_config()["fan_geometry"]["altitude_m"].items()}
+
+
+# ── Derived dimensional quantities (computed at runtime) ─────────────────────
+
+def get_radii() -> dict[str, float]:
+    """Absolute blade radii [m] per section: r_rel × r_tip_m."""
+    r_tip = get_r_tip_m()
+    return {sec: rr * r_tip for sec, rr in get_r_rel().items()}
+
+
+def get_omega_map(gear_ratio: float = 1.0) -> dict[str, float]:
+    """Angular velocity [rad/s] per condition: M_tip × a(h) / r_tip / gear_ratio."""
+    r_tip = get_r_tip_m()
+    alt = get_altitude_m()
     return {
-        flight: {section: float(v) for section, v in sections.items()}
-        for flight, sections in load_config()["reynolds"].items()
+        cond: M * _isa_atmosphere(alt[cond])[0] / r_tip / gear_ratio
+        for cond, M in get_M_tip_design().items()
     }
 
+
+def get_va_map(gear_ratio: float = 1.0) -> dict[str, float]:
+    """Axial fan-face velocity Va [m/s] per condition: phi × omega × r_tip."""
+    r_tip = get_r_tip_m()
+    omega = get_omega_map(gear_ratio)
+    return {
+        cond: phi * omega[cond] * r_tip
+        for cond, phi in get_phi_design().items()
+    }
+
+
+def get_reynolds_map() -> dict[str, dict[str, float]]:
+    """Reynolds numbers Re = rho·W_rel·c/mu per (flight condition, blade section).
+
+    chord c [m] = sigma · 2π · r / Z  from blade_geometry.solidity.
+    """
+    bg = get_blade_geometry()
+    num_blades = bg["num_blades"]
+    solidity = bg["solidity"]
+    alt = get_altitude_m()
+    radii = get_radii()
+    omega = get_omega_map()
+    va = get_va_map()
+    result: dict[str, dict[str, float]] = {}
+    for cond, h in alt.items():
+        _, rho, mu = _isa_atmosphere(h)
+        result[cond] = {}
+        for sec, r_sec in radii.items():
+            U_sec = omega[cond] * r_sec
+            W_rel = math.sqrt(va[cond] ** 2 + U_sec ** 2)
+            chord = solidity.get(sec, 1.0) * 2.0 * math.pi * r_sec / num_blades
+            result[cond][sec] = rho * W_rel * chord / mu
+    return result
+
+
+# ── Standard accessors (unchanged) ───────────────────────────────────────────
 
 def get_ncrit_table() -> dict[str, float]:
     return {k: float(v) for k, v in load_config()["ncrit"].items()}
@@ -95,18 +175,6 @@ def get_airfoil_thickness_ratio() -> float:
 
 def get_korn_kappa() -> float:
     return float(load_config()["airfoil_geometry"]["korn_kappa"])
-
-
-def get_fan_rpm() -> dict[str, float]:
-    return {k: float(v) for k, v in load_config()["fan_geometry"]["rpm"].items()}
-
-
-def get_blade_radii() -> dict[str, float]:
-    return {k: float(v) for k, v in load_config()["fan_geometry"]["radius"].items()}
-
-
-def get_axial_velocities() -> dict[str, float]:
-    return {k: float(v) for k, v in load_config()["fan_geometry"]["axial_velocity"].items()}
 
 
 def get_blade_geometry() -> dict[str, Any]:

@@ -94,9 +94,28 @@ class XfoilSettings:
 
 @dataclass
 class FanGeometry:
-    """Variable-pitch fan geometry."""
-    rpm: Dict[str, float]          # RPM per flight condition
-    omega_rad_s: Dict[str, float]  # ω [rad/s] per flight condition
+    """Variable-pitch fan geometry (non-dimensional parameterisation).
+
+    Primary inputs (from YAML):
+        M_tip        — tip Mach number U_tip/a per flight condition
+        phi_tip      — flow coefficient Va/(ω·r_tip) per flight condition
+        r_rel        — non-dimensional radii r/r_tip per blade section
+        r_tip_m      — tip radius [m] (sole dimensional anchor)
+        hub_to_tip_ratio — r_hub/r_tip
+        altitude_m   — ISA pressure altitude [m] per flight condition
+
+    Derived (computed in settings.py from ISA + primary inputs):
+        omega_rad_s        — angular velocity [rad/s] per condition
+        radii_m            — absolute blade radii [m] per section
+        axial_velocity_m_s — axial velocity Va [m/s] per condition
+    """
+    M_tip: Dict[str, float]
+    phi_tip: Dict[str, float]
+    r_rel: Dict[str, float]
+    r_tip_m: float
+    hub_to_tip_ratio: float
+    altitude_m: Dict[str, float]
+    omega_rad_s: Dict[str, float]
     radii_m: Dict[str, float]
     axial_velocity_m_s: Dict[str, float]
 
@@ -172,7 +191,9 @@ class PipelineSettings:
     selection_conditions: List[ResolvedSelectionCondition] = field(default_factory=list)
 
     fan: FanGeometry = field(default_factory=lambda: FanGeometry(
-        rpm={}, omega_rad_s={}, radii_m={}, axial_velocity_m_s={},
+        M_tip={}, phi_tip={}, r_rel={}, r_tip_m=1.70,
+        hub_to_tip_ratio=0.312, altitude_m={},
+        omega_rad_s={}, radii_m={}, axial_velocity_m_s={},
     ))
     blade: BladeGeometry = field(default_factory=lambda: BladeGeometry(
         num_blades=16, solidity={}, theta_camber_deg=8.0,

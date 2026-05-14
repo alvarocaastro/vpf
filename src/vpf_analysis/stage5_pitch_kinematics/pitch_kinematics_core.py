@@ -13,13 +13,13 @@ import pandas as pd
 
 from vpf_analysis.settings import get_settings as _get_settings
 from vpf_analysis.config_loader import (
-    get_axial_velocities,
-    get_blade_radii,
-    get_fan_rpm,
     get_gear_ratio,
+    get_omega_map,
+    get_radii,
     get_reference_mach,
-    get_reynolds_table,
+    get_reynolds_map,
     get_target_mach,
+    get_va_map,
 )
 from vpf_analysis.postprocessing.aerodynamics_utils import (
     find_second_peak_row,
@@ -101,7 +101,7 @@ def compute_cascade_corrections(
     Z = blade_geometry["num_blades"]
     solidities: Dict[str, float] = blade_geometry["solidity"]
     theta = blade_geometry["theta_camber_deg"]
-    radii = get_blade_radii()
+    radii = get_radii()
 
     results: List[CascadeResult] = []
     for section, r in radii.items():
@@ -245,7 +245,7 @@ def compute_rotational_corrections(
     """Compute Snel 3D corrections for each (condition, section)."""
     Z = blade_geometry["num_blades"]
     solidities: Dict[str, float] = blade_geometry["solidity"]
-    radii = get_blade_radii()
+    radii = get_radii()
 
     if "cl_cascade" in df_polars.columns:
         cl_col = "cl_cascade"
@@ -356,9 +356,9 @@ def compute_rotational_corrections_du_selig(
 
     Z = blade_geometry["num_blades"]
     solidities: Dict[str, float] = blade_geometry["solidity"]
-    radii = get_blade_radii()
-    va_map = get_axial_velocities()
-    rpm_map = get_fan_rpm()
+    radii = get_radii()
+    va_map = get_va_map(gear_ratio)
+    omega_map = get_omega_map(gear_ratio)
 
     if "cl_cascade" in df_polars.columns:
         cl_col = "cl_cascade"
@@ -373,8 +373,7 @@ def compute_rotational_corrections_du_selig(
 
     for condition in conditions:
         va = va_map.get(condition, 150.0)
-        # ω_fan = ω_shaft / gear_ratio (1.0 for direct-drive)
-        omega = rpm_map.get(condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0) / gear_ratio
+        omega = omega_map.get(condition, next(iter(omega_map.values())))
         for section in sections:
             r = radii.get(section, float("nan"))
             sigma = solidities.get(section, 1.0)
@@ -441,10 +440,10 @@ def build_3d_polar_map(
     """
     Z = blade_geometry["num_blades"]
     solidities = blade_geometry["solidity"]
-    radii = get_blade_radii()
-    va_map = get_axial_velocities()
-    rpm_map = get_fan_rpm()
     _gear_ratio = get_gear_ratio()
+    radii = get_radii()
+    va_map = get_va_map(_gear_ratio)
+    omega_map = get_omega_map(_gear_ratio)
 
     if "cl_cascade" in df_polars.columns:
         cl_col = "cl_cascade"
@@ -456,7 +455,7 @@ def build_3d_polar_map(
     polar_map: Dict[tuple, pd.DataFrame] = {}
     for condition in df_polars["condition"].unique():
         va = va_map.get(condition, 150.0)
-        omega_cond = rpm_map.get(condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0) / _gear_ratio
+        omega_cond = omega_map.get(condition, next(iter(omega_map.values())))
         for section, r in radii.items():
             sigma = solidities.get(section, 1.0)
             c_over_r = sigma * 2.0 * math.pi / Z if Z > 0 else 0.0
@@ -502,7 +501,7 @@ def compute_all_optimal_incidences(
     df_corrected: pd.DataFrame | None = None,
 ) -> List[OptimalIncidence]:
     """Compute optimal incidence for all conditions and sections."""
-    reynolds_table = get_reynolds_table()
+    reynolds_table = get_reynolds_map()
     target_mach = get_target_mach()
     reference_mach = get_reference_mach()
 
@@ -873,9 +872,9 @@ def compute_kinematics(
     gear_ratio: float = 1.0,
 ) -> List[KinematicsResult]:
     """Compute velocity triangles and mechanical pitch angle for each case."""
-    rpm_map = get_fan_rpm()
-    radii = get_blade_radii()
-    va_dict = get_axial_velocities()
+    omega_map = get_omega_map(gear_ratio)
+    radii = get_radii()
+    va_dict = get_va_map(gear_ratio)
 
     results: List[KinematicsResult] = []
     reference_beta: Dict[str, float] = {}
@@ -883,8 +882,7 @@ def compute_kinematics(
     for adj in pitch_adjustments:
         va = va_dict.get(adj.condition, float("nan"))
         r = radii.get(adj.section, float("nan"))
-        # ω_fan = ω_shaft / gear_ratio (1.0 for direct-drive)
-        omega = rpm_map.get(adj.condition, next(iter(rpm_map.values()))) * (2.0 * math.pi / 60.0) / gear_ratio
+        omega = omega_map.get(adj.condition, next(iter(omega_map.values())))
         u = omega * r if not math.isnan(r) else float("nan")
         phi = math.degrees(math.atan2(va, u)) if (u > 0 and not math.isnan(va)) else 0.0
         beta = adj.alpha_opt + phi

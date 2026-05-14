@@ -408,7 +408,7 @@ def step_3_xfoil_simulations(s1: Stage1Result) -> Stage2Result:
         plot_alpha_opt_evolution(alpha_eff_map, configs, pitch_map_dir)
         pitch_df, delta_beta = compute_pitch_map(
             alpha_eff_map,
-            cfg.fan.rpm,
+            cfg.fan.omega_rad_s,
             cfg.fan.radii_m,
             cfg.fan.axial_velocity_m_s,
             gear_ratio=get_gear_ratio(),
@@ -569,7 +569,7 @@ def step_5_metrics_and_figures(s3: Stage3Result) -> Stage4Result:
                 polars_dir,
                 axial_velocities=cfg.fan.axial_velocity_m_s,
                 blade_radii=cfg.fan.radii_m,
-                fan_rpm=cfg.fan.rpm,
+                fan_omega=cfg.fan.omega_rad_s,
                 gear_ratio=get_gear_ratio(),
             )
 

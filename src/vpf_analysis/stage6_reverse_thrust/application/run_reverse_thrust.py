@@ -103,9 +103,9 @@ def _load_polar_for_section(
 
 def _build_chord_map() -> dict[str, float]:
     """Derive chord [m] from solidity: c = σ · 2π · r / Z."""
-    from vpf_analysis.config_loader import get_blade_geometry, get_blade_radii
+    from vpf_analysis.config_loader import get_blade_geometry, get_radii
     bg = get_blade_geometry()
-    radii = get_blade_radii()
+    radii = get_radii()
     Z = bg["num_blades"]
     return {
         sec: bg["solidity"][sec] * 2.0 * math.pi * radii[sec] / Z
@@ -138,8 +138,7 @@ def run_reverse_thrust() -> None:
         design_thrust_kN=design_thrust_kN,
         cruise_thrust_fraction=cruise_thrust_fraction,
         aircraft_L_D=float(rt_cfg["aircraft_L_D"]),
-        fan_diameter_ref_m=float(rt_cfg.get("fan_diameter_ref_m", 0.0)),
-        fan_diameter_uhbpr_m=float(rt_cfg.get("fan_diameter_uhbpr_m", 0.0)),
+        d_scale_factor=float(rt_cfg.get("fan_diameter_ratio", 1.0)) ** 2.5,
     )
 
     LOGGER.info(

@@ -137,6 +137,26 @@ def clear_settings_cache() -> None:
     _SETTINGS_CACHE = None
 
 
+_ISA_T0: Final[float] = 288.15     # K
+_ISA_P0: Final[float] = 101325.0   # Pa
+_ISA_R:  Final[float] = 287.05     # J/(kg·K)
+_ISA_G:  Final[float] = 9.80665    # m/s²
+_ISA_GAMMA: Final[float] = 1.4
+_ISA_LAPSE: Final[float] = 0.0065  # K/m (troposphere)
+_ISA_MU0:   Final[float] = 1.7894e-5  # Pa·s at T0
+
+
+def _isa_atmosphere(altitude_m: float) -> tuple[float, float, float]:
+    """Return (a [m/s], rho [kg/m³], mu [Pa·s]) for ISA standard troposphere."""
+    h = max(0.0, min(altitude_m, 11000.0))
+    T = _ISA_T0 - _ISA_LAPSE * h
+    P = _ISA_P0 * (T / _ISA_T0) ** (_ISA_G / (_ISA_R * _ISA_LAPSE))
+    rho = P / (_ISA_R * T)
+    mu = _ISA_MU0 * (T / _ISA_T0) ** 0.7
+    a = math.sqrt(_ISA_GAMMA * _ISA_R * T)
+    return a, rho, mu
+
+
 def _load_settings(config_path: Path | None) -> PipelineSettings:
     """Load and validate parameters from YAML files."""
     if config_path is None:
@@ -153,10 +173,6 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
     flight_conditions: list[str] = raw["flight_conditions"]
     blade_sections: list[str] = raw["blade_sections"]
 
-    reynolds_table = {
-        flight: {section: float(v) for section, v in sections.items()}
-        for flight, sections in raw["reynolds"].items()
-    }
     ncrit_table = {k: float(v) for k, v in raw["ncrit"].items()}
     target_mach = {k: float(v) for k, v in raw["target_mach"].items()}
     target_mach_per_section: dict[str, dict[str, float]] = {
@@ -172,19 +188,57 @@ def _load_settings(config_path: Path | None) -> PipelineSettings:
         "step": sel.get("alpha_step",  0.15),
     }
 
+    # Fan geometry — non-dimensional parameterisation
     fg = raw["fan_geometry"]
-    rpm_map = {k: float(v) for k, v in fg["rpm"].items()}
+    M_tip = {k: float(v) for k, v in fg["M_tip_design"].items()}
+    phi   = {k: float(v) for k, v in fg["phi_design"].items()}
+    r_rel = {k: float(v) for k, v in fg["r_rel"].items()}
+    r_tip_m = float(fg["r_tip_m"])
+    hub_to_tip_ratio = float(fg["hub_to_tip_ratio"])
+    alt_m = {k: float(v) for k, v in fg["altitude_m"].items()}
+
+    # Derive dimensional kinematics
+    omega_rad_s: dict[str, float] = {}
+    va_m_s: dict[str, float] = {}
+    for cond in flight_conditions:
+        a_isa, _, _ = _isa_atmosphere(alt_m[cond])
+        omega_rad_s[cond] = M_tip[cond] * a_isa / r_tip_m
+        va_m_s[cond] = phi[cond] * omega_rad_s[cond] * r_tip_m
+    radii_m: dict[str, float] = {sec: r_rel[sec] * r_tip_m for sec in blade_sections}
+
     fan = FanGeometry(
-        rpm=rpm_map,
-        omega_rad_s={k: v * 2.0 * math.pi / 60.0 for k, v in rpm_map.items()},
-        radii_m={k: float(v) for k, v in fg["radius"].items()},
-        axial_velocity_m_s={k: float(v) for k, v in fg["axial_velocity"].items()},
+        M_tip=M_tip,
+        phi_tip=phi,
+        r_rel=r_rel,
+        r_tip_m=r_tip_m,
+        hub_to_tip_ratio=hub_to_tip_ratio,
+        altitude_m=alt_m,
+        omega_rad_s=omega_rad_s,
+        radii_m=radii_m,
+        axial_velocity_m_s=va_m_s,
     )
 
+    # Blade geometry (needed to compute chord for Re)
     bg = raw["blade_geometry"]
+    num_blades = int(bg["num_blades"])
+    solidity = {k: float(v) for k, v in bg["solidity"].items()}
+
+    # Reynolds table — derived from ISA + blade chord
+    # c [m] = sigma * 2*pi*r / Z;  Re = rho * W_rel * c / mu
+    reynolds_table: dict[str, dict[str, float]] = {}
+    for cond in flight_conditions:
+        a_isa, rho, mu = _isa_atmosphere(alt_m[cond])
+        reynolds_table[cond] = {}
+        for sec in blade_sections:
+            r_sec = radii_m[sec]
+            U_sec = omega_rad_s[cond] * r_sec
+            W_rel = math.sqrt(va_m_s[cond] ** 2 + U_sec ** 2)
+            chord = solidity.get(sec, 1.0) * 2.0 * math.pi * r_sec / num_blades
+            reynolds_table[cond][sec] = rho * W_rel * chord / mu
+
     blade = BladeGeometry(
-        num_blades=int(bg["num_blades"]),
-        solidity={k: float(v) for k, v in bg["solidity"].items()},
+        num_blades=num_blades,
+        solidity=solidity,
         theta_camber_deg=float(bg["theta_camber_deg"]),
     )
 

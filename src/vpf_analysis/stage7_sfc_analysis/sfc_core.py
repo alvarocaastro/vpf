@@ -209,21 +209,27 @@ def compute_sfc_analysis(
     flight_conditions = get_flight_conditions()
 
     try:
-        from vpf_analysis.config_loader import get_axial_velocities, get_blade_radii, get_fan_rpm, get_gear_ratio
-        _va = get_axial_velocities()
-        _radii = get_blade_radii()
-        _rpm_map = get_fan_rpm()
+        from vpf_analysis.config_loader import (
+            get_gear_ratio, get_omega_map, get_phi_design, get_r_rel, get_radii, get_va_map,
+        )
         _gear_ratio = get_gear_ratio()
-        _omega_cruise = _rpm_map.get("cruise", next(iter(_rpm_map.values()))) * (2.0 * _math.pi / 60.0) / _gear_ratio
+        _va = get_va_map(_gear_ratio)
+        _radii = get_radii()
+        _omega_map = get_omega_map(_gear_ratio)
+        _omega_cruise = _omega_map.get("cruise", next(iter(_omega_map.values())))
         _use_map = True
-        _va_cruise = _va.get("cruise", 150.0)
-        _phi_design: dict = {sec: _va_cruise / (_omega_cruise * r) for sec, r in _radii.items()}
+        _phi_design_cfg = get_phi_design()
+        _r_rel_cfg = get_r_rel()
+        _phi_design: dict = {
+            sec: _phi_design_cfg.get("cruise", 0.411) / _r_rel_cfg.get(sec, 1.0)
+            for sec in _radii
+        }
     except Exception as exc:
         LOGGER.warning("Could not load kinematic data for map mechanism: %s — profile only.", exc)
         _use_map = False
         _va = {}
         _radii = {}
-        _rpm_map = {}
+        _omega_map = {}
         _omega_cruise = 0.0
         _phi_design = {}
 
@@ -262,7 +268,7 @@ def compute_sfc_analysis(
                 phi_cond = phi_des
                 delta_eta_map = 0.0
             elif _use_map and section in _radii and _omega_cruise > 0:
-                _omega_cond = _rpm_map.get(condition, next(iter(_rpm_map.values()), 0.0)) * (2.0 * _math.pi / 60.0) / _gear_ratio if _rpm_map else _omega_cruise
+                _omega_cond = _omega_map.get(condition, _omega_cruise) if _omega_map else _omega_cruise
                 u_sec = _omega_cond * _radii[section]
                 phi_cond = _va_cond / u_sec if u_sec > 0 else float("nan")
                 phi_des = _phi_design.get(section, float("nan"))

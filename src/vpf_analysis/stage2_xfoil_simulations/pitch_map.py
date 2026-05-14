@@ -30,7 +30,7 @@ from vpf_analysis.shared.plot_style import (
 
 def compute_pitch_map(
     alpha_eff_map: Dict[Tuple[str, str], float],
-    rpm: Dict[str, float],
+    omega_rad_s: Dict[str, float],
     radii: Dict[str, float],
     axial_velocities: Dict[str, float],
     gear_ratio: float = 1.0,
@@ -41,10 +41,10 @@ def compute_pitch_map(
     Parameters
     ----------
     alpha_eff_map : dict mapping (flight_name, section_name) -> alpha_opt [deg]
-    rpm : LPT rotational speed [RPM] per flight condition
+    omega_rad_s : fan angular velocity [rad/s] per flight condition
     radii : dict section_name -> radius [m]
     axial_velocities : dict flight_name -> axial velocity Va [m/s]
-    gear_ratio : shaft-to-fan speed ratio (1.0 = direct-drive, fan RPM = shaft RPM).
+    gear_ratio : shaft-to-fan speed ratio (1.0 = direct-drive, fan ω = shaft ω).
 
     Returns
     -------
@@ -59,8 +59,7 @@ def compute_pitch_map(
         va = axial_velocities.get(flight)
         if r is None or va is None:
             continue
-        # ω_fan = ω_shaft / gear_ratio (1.0 for direct-drive)
-        omega = 2.0 * math.pi * rpm.get(flight, next(iter(rpm.values()))) / (60.0 * gear_ratio)
+        omega = omega_rad_s.get(flight, next(iter(omega_rad_s.values()))) / gear_ratio
         u = omega * r                            # fan blade speed [m/s]
         phi_rad = math.atan2(va, u)              # flow angle [rad]
         phi_deg = math.degrees(phi_rad)          # flow angle [deg]

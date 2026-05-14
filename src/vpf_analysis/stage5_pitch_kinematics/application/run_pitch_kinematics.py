@@ -44,11 +44,11 @@ import pandas as pd
 
 from vpf_analysis import settings as base_config
 from vpf_analysis.config_loader import (
-    get_axial_velocities,
     get_blade_geometry,
-    get_blade_radii,
-    get_fan_rpm,
     get_gear_ratio,
+    get_omega_map,
+    get_radii,
+    get_va_map,
 )
 from vpf_analysis.shared.plot_style import FLIGHT_LABELS, SECTION_COLORS, SECTION_LABELS, apply_style
 from vpf_analysis.stage5_pitch_kinematics.adapters.filesystem.data_loader import (
@@ -487,7 +487,7 @@ def _fig_loading_profile_spanwise(
     figures_dir: Path,
 ) -> None:
     """ψ(r) at cruise vs takeoff vs climb — radial loading profile."""
-    radii_map = get_blade_radii()
+    radii_map = get_radii()
     conds_to_plot = [c for c in ["cruise", "climb", "takeoff"] if c in set(r.condition for r in loading)]
 
     fig, ax = plt.subplots(figsize=(6.5, 5.0))
@@ -955,12 +955,10 @@ def run_pitch_kinematics() -> None:
 
     # ── 2. Geometry ──────────────────────────────────────────────────────────
     blade_geom   = get_blade_geometry()
-    radii        = get_blade_radii()
-    axial_vels   = get_axial_velocities()
-    rpm_map      = get_fan_rpm()
     gear_ratio   = get_gear_ratio()
-    # ω_fan = ω_shaft / gear_ratio (1.0 for direct-drive)
-    omega_map    = {cond: r * (2.0 * math.pi / 60.0) / gear_ratio for cond, r in rpm_map.items()}
+    radii        = get_radii()
+    axial_vels   = get_va_map(gear_ratio)
+    omega_map    = get_omega_map(gear_ratio)
     omega_cruise = omega_map.get("cruise", next(iter(omega_map.values())))
 
     # ── 3. [A] Cascade corrections ───────────────────────────────────────────
@@ -1014,9 +1012,9 @@ def run_pitch_kinematics() -> None:
     from vpf_analysis.stage5_pitch_kinematics.core.domain.pitch_kinematics_result import (
         OptimalIncidence,
     )
-    from vpf_analysis.config_loader import get_reynolds_table, get_target_mach
+    from vpf_analysis.config_loader import get_reynolds_map, get_target_mach
 
-    reynolds_table = get_reynolds_table()
+    reynolds_table = get_reynolds_map()
     mach_table     = get_target_mach()
     optimal_incidences = [
         OptimalIncidence(

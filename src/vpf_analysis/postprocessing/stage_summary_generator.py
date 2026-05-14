@@ -16,7 +16,7 @@ from vpf_analysis.config_loader import (
     get_blade_sections,
     get_flight_conditions,
     get_ncrit_table,
-    get_reynolds_table,
+    get_reynolds_map,
     get_selection_alpha_range,
     get_selection_conditions,
     get_target_mach,
@@ -91,7 +91,7 @@ def generate_stage2_summary(
     alpha   = get_alpha_range()
     flights = get_flight_conditions()
     sects   = get_blade_sections()
-    re_tab  = get_reynolds_table()
+    re_tab  = get_reynolds_map()
     nc_tab  = get_ncrit_table()
 
     lines = _header(2, "XFOIL AERODYNAMIC SIMULATIONS")

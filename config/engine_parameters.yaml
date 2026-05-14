@@ -108,11 +108,10 @@ reverse_thrust:
                                         #      Leylekian et al. (2014) nacelle weight breakdown.
   aircraft_L_D: 20.5                    # B777X cruise lift-to-drag ratio (GE/Boeing public data)
 
-  # Fan diameter — used for D^2.5 mechanism weight scaling law
-  # Weight ∝ D^2.5 (Raymer, 2018; Roskam Vol. V) captures structural mass growth
-  # with fan diameter more accurately than a fixed fraction of engine dry weight.
-  fan_diameter_ref_m: 3.40             # Reference: GE9X fan diameter [m] (BPR ≈ 10)
-  fan_diameter_uhbpr_m: 4.16           # UHBPR target: 3.40 × √(15/10) ≈ 4.16 m (BPR = 15)
+  # Fan diameter scaling — D^2.5 mechanism weight law (Raymer, 2018; Roskam Vol. V).
+  # fan_diameter_ratio = D_uhbpr / D_ref = sqrt(BPR_uhbpr / BPR_ref) = sqrt(15/10) ≈ 1.224
+  # d_scale = fan_diameter_ratio^2.5 applied directly in reverse_thrust_core.py.
+  fan_diameter_ratio: 1.224            # D_uhbpr/D_ref = sqrt(15/10); ref BPR≈10, target BPR=15
 
   # Reverse-thrust effectiveness by mechanism type
   # VPF "through-feather": blade passes through flat pitch into negative pitch angles.

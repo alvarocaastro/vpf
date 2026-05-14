@@ -225,7 +225,7 @@ def enrich_with_cruise_reference(
     design_condition: str = "cruise",
     axial_velocities: Dict[str, float] | None = None,
     blade_radii: Dict[str, float] | None = None,
-    fan_rpm: Dict[str, float] | None = None,
+    fan_omega: Dict[str, float] | None = None,
     gear_ratio: float = 1.0,
 ) -> List[AerodynamicMetrics]:
     """Enrich metrics with design-reference fields relative to the cruise condition.
@@ -266,8 +266,8 @@ def enrich_with_cruise_reference(
         Va [m/s] per flight condition, e.g. ``{"cruise": 150.0, "takeoff": 180.0}``.
     blade_radii:
         Blade radius [m] per section, e.g. ``{"root": 0.53, "mid_span": 1.00}``.
-    fan_rpm:
-        Fan rotational speed [RPM].
+    fan_omega:
+        Fan angular velocity [rad/s] per flight condition.
 
     Returns
     -------
@@ -280,17 +280,17 @@ def enrich_with_cruise_reference(
     use_triangles = (
         axial_velocities is not None
         and blade_radii is not None
-        and fan_rpm is not None
+        and fan_omega is not None
     )
     phi: Dict[tuple[str, str], float] = {}   # (condition, section) → φ [deg]
     if use_triangles:
-        _rpm_fallback = next(iter(fan_rpm.values())) if fan_rpm else 0.0
+        _omega_fallback = next(iter(fan_omega.values())) if fan_omega else 0.0
         for cond, va in axial_velocities.items():
-            omega = fan_rpm.get(cond, _rpm_fallback) * (2.0 * math.pi / 60.0) / gear_ratio
+            omega = fan_omega.get(cond, _omega_fallback) / gear_ratio
             for sec, r in blade_radii.items():
                 u = omega * r
                 phi[(cond, sec)] = math.degrees(math.atan2(va, u))
-        LOGGER.info("Velocity-triangle enrichment active (RPM per condition)")
+        LOGGER.info("Velocity-triangle enrichment active (omega per condition)")
     else:
         LOGGER.warning(
             "Velocity-triangle data not provided — falling back to simplified "
