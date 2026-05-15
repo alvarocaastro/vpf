@@ -600,7 +600,7 @@ def _weighted_mean(values_weights: List[Tuple[float, float]]) -> float:
 
 _LB_TO_KG: float = 0.453592
 _LB_PER_KN: float = 224.809
-_CO2_FACTOR: float = 3.16
+_CO2_FACTOR: float = 3.16  # kg CO2 / kg fuel — Ref: ICAO CORSIA (2022), LCA Methodology, §1.4.5 aviation fuel baseline
 _MIN_TO_HR: float = 1.0 / 60.0
 
 

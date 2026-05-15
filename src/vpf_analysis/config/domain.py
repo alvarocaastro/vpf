@@ -54,6 +54,7 @@ class PhysicsConstants:
     """
 
     # Efficient fan design zone (φ-ψ diagram)
+    # Ref: Dixon & Hall (2013), Fluid Mechanics of Turbomachinery, §5.2 — φ = Va/U, ψ = ΔW/U²
     # NOTE: Bounds from Dixon & Hall (2013) apply to low-speed fans at mid-span.
     # Hub/root sections (r=0.53 m) routinely show φ > 1.0 in cruise — this is expected
     # and does not indicate a design error. Use these limits as reference guides only.

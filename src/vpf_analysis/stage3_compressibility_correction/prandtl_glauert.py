@@ -4,6 +4,12 @@ Prandtl–Glauert compressibility correction model.
 This correction is valid as a first-order approximation for subsonic compressible
 flow. It corrects lift and pressure-related coefficients but drag requires
 separate treatment.
+
+References
+----------
+Prandtl, L. (1927). Ges. Abh. 346-353; Glauert, H. (1928). ARCR&M 1135.
+    Linear compressibility rule: C = C_incomp / β, β = √(1 − M²).
+Anderson, J.D. (2017). Fundamentals of Aerodynamics, 6th ed., §11.4, eq. 11.51.
 """
 
 from __future__ import annotations
@@ -40,6 +46,7 @@ class PrandtlGlauertModel:
         float
             Compressibility factor.
         """
+        # Ref: Prandtl (1927) / Glauert (1928); Anderson (2017) eq. 11.51 — β = √(1 − M²)
         if mach >= 1.0:
             raise ValueError(f"Mach {mach} >= 1.0: correction not valid for supersonic")
         return math.sqrt(1.0 - mach * mach)
@@ -65,6 +72,7 @@ class PrandtlGlauertModel:
         beta_ref = self.compute_beta(case.reference_mach)
         beta_target = self.compute_beta(case.target_mach)
 
+        # Ref: Prandtl (1927) / Glauert (1928) — C_corrected = C_ref × (β_ref / β_target)
         # Correction factor: C_corrected = C_ref * (beta_ref / beta_target)
         correction_factor = beta_ref / beta_target
 

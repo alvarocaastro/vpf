@@ -137,13 +137,14 @@ def clear_settings_cache() -> None:
     _SETTINGS_CACHE = None
 
 
-_ISA_T0: Final[float] = 288.15     # K
-_ISA_P0: Final[float] = 101325.0   # Pa
-_ISA_R:  Final[float] = 287.05     # J/(kg·K)
-_ISA_G:  Final[float] = 9.80665    # m/s²
-_ISA_GAMMA: Final[float] = 1.4
-_ISA_LAPSE: Final[float] = 0.0065  # K/m (troposphere)
-_ISA_MU0:   Final[float] = 1.7894e-5  # Pa·s at T0
+# Ref: ICAO Standard Atmosphere (Doc 7488 / ISO 2533:1975), Table 1 — sea-level values
+_ISA_T0: Final[float] = 288.15     # K      — Ref: ICAO Doc 7488, Table 1
+_ISA_P0: Final[float] = 101325.0   # Pa     — Ref: ICAO Doc 7488, Table 1
+_ISA_R:  Final[float] = 287.05     # J/(kg·K) — Ref: NACA TN-1135 (1953), Appendix A
+_ISA_G:  Final[float] = 9.80665    # m/s²   — Ref: ICAO Doc 7488, Table 1
+_ISA_GAMMA: Final[float] = 1.4     # —       Ref: NACA TN-1135 (1953), §3 (diatomic gas, n=5)
+_ISA_LAPSE: Final[float] = 0.0065  # K/m    — Ref: ICAO Doc 7488, Table 4 (troposphere lapse rate)
+_ISA_MU0:   Final[float] = 1.7894e-5  # Pa·s at T0 — Ref: ICAO Doc 7488, Table 1
 
 
 def _isa_atmosphere(altitude_m: float) -> tuple[float, float, float]:
@@ -153,7 +154,7 @@ def _isa_atmosphere(altitude_m: float) -> tuple[float, float, float]:
     P = _ISA_P0 * (T / _ISA_T0) ** (_ISA_G / (_ISA_R * _ISA_LAPSE))
     rho = P / (_ISA_R * T)
     mu = _ISA_MU0 * (T / _ISA_T0) ** 0.7
-    a = math.sqrt(_ISA_GAMMA * _ISA_R * T)
+    a = math.sqrt(_ISA_GAMMA * _ISA_R * T)  # Ref: NACA TN-1135 (1953), eq. 29b — a = √(γRT)
     return a, rho, mu
 
 

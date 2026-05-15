@@ -208,6 +208,7 @@ class RotationalCorrectionResult:
 
 def _apply_snel(df: pd.DataFrame, c_over_r: float, cl_col: str) -> pd.DataFrame:
     df = df.copy()
+    # Ref: Snel, H. et al. (1994), ECN-C-94-107 — ΔCL = 3.1·(c/r)²·(CL_pot − CL_2D); simplified to ΔCL = A·(c/r)²·CL_2D
     snel_factor = _SNEL_A * c_over_r ** 2
     cd_col = "cd_corrected" if "cd_corrected" in df.columns else "cd"
     df["delta_cl_snel"] = snel_factor * df[cl_col]
@@ -324,8 +325,8 @@ def _apply_du_selig(
     """
     df = df.copy()
     cd_col = "cd_corrected" if "cd_corrected" in df.columns else "cd"
-    f_lambda = lambda_r ** 2 / (lambda_r ** 2 + 1.0) if lambda_r >= 0 else 0.0
-    du_selig_factor = _DU_SELIG_A * f_lambda * (c_over_r ** 1.6)
+    f_lambda = lambda_r ** 2 / (lambda_r ** 2 + 1.0) if lambda_r >= 0 else 0.0  # Ref: Du & Selig (1998), AIAA-1998-0021, eq. 20 — f(λ_r) = λ_r²/(λ_r²+1)
+    du_selig_factor = _DU_SELIG_A * f_lambda * (c_over_r ** 1.6)  # Ref: Du & Selig (1998), AIAA-1998-0021 — ΔCL = 1.6·f(λ_r)·(c/r)^1.6·CL_2D
     df["delta_cl_du_selig"] = du_selig_factor * df[cl_col]
     df["cl_3d_ds"] = df[cl_col] + df["delta_cl_du_selig"]
     df["ld_3d_ds"] = df["cl_3d_ds"] / df[cd_col].replace(0.0, float("nan"))
@@ -824,7 +825,7 @@ def compute_stage_loading(
             continue
         phi_flow = math.degrees(math.atan2(va, u))
         beta_mech = alpha_deg + phi_flow
-        phi_coeff = va / u
+        phi_coeff = va / u  # Ref: Dixon & Hall (2013), Fluid Mechanics of Turbomachinery, §5.2 — φ = Va/U
 
         beta_rad = math.radians(beta_mech)
         tan_beta = math.tan(beta_rad)
@@ -833,7 +834,7 @@ def compute_stage_loading(
         else:
             v_theta = u - va / tan_beta
 
-        psi = v_theta / u if u > 0 and not math.isnan(v_theta) else float("nan")
+        psi = v_theta / u if u > 0 and not math.isnan(v_theta) else float("nan")  # Ref: Dixon & Hall (2013), §5.2 — ψ = Vθ/U
         w_spec = u * v_theta / 1000.0 if not math.isnan(v_theta) else float("nan")
 
         in_zone = (
