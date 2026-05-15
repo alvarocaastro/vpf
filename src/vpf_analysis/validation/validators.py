@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Sequence
 
 import pandas as pd
 
@@ -147,9 +147,9 @@ class PolarQualityWarning:
 def validate_polar_quality(
     df: pd.DataFrame,
     context: str = "",
-) -> List[PolarQualityWarning]:
+) -> list[PolarQualityWarning]:
     """Check aerodynamic quality indicators of a polar. Returns warnings; does not raise."""
-    warnings: List[PolarQualityWarning] = []
+    warnings: list[PolarQualityWarning] = []
 
     if df.empty:
         return warnings
@@ -212,8 +212,8 @@ class XfoilConvergenceInfo:
     """Result of parsing XFOIL stdout for convergence information."""
     n_convergence_failures: int = 0
     n_points_computed: int = 0
-    failed_alpha_values: List[float] = field(default_factory=list)
-    raw_warnings: List[str] = field(default_factory=list)
+    failed_alpha_values: list[float] = field(default_factory=list)
+    raw_warnings: list[str] = field(default_factory=list)
 
     @property
     def has_failures(self) -> bool:
@@ -232,8 +232,8 @@ def check_xfoil_convergence(stdout: str) -> XfoilConvergenceInfo:
     """Parse XFOIL stdout and extract convergence information."""
     failures = 0
     computed = 0
-    failed_alphas: List[float] = []
-    raw_warnings: List[str] = []
+    failed_alphas: list[float] = []
+    raw_warnings: list[str] = []
     last_alpha: float | None = None
 
     _re_alpha_attempt = re.compile(r"a\s*=\s*([-\d.]+)", re.IGNORECASE)

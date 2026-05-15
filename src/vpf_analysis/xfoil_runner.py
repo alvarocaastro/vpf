@@ -206,12 +206,11 @@ def run_xfoil_polar(
             f"Airfoil file not found: {request.airfoil_dat}"
         )
 
-    if max_retries is None:
-        from vpf_analysis.settings import get_settings
-        max_retries = get_settings().xfoil.MAX_RETRIES
-
     from vpf_analysis.settings import get_settings
-    wait_s = get_settings().xfoil.RETRY_WAIT_S
+    _xfoil_cfg = get_settings().xfoil
+    if max_retries is None:
+        max_retries = _xfoil_cfg.MAX_RETRIES
+    wait_s = _xfoil_cfg.RETRY_WAIT_S
 
     cwd: Path = AIRFOIL_DATA_DIR
 
@@ -331,24 +330,3 @@ def run_xfoil_polar(
         f"Last error: {last_error}"
     )
 
-
-
-def quick_smoke_test(airfoil_dat: Path) -> bool:
-    """Run a minimal polar to verify the XFOIL binary works."""
-    out_path = airfoil_dat.with_suffix(".test_polar.txt")
-    req = XfoilPolarRequest(
-        airfoil_dat=airfoil_dat,
-        re=1.0e6,
-        alpha_start=0.0,
-        alpha_end=4.0,
-        alpha_step=2.0,
-        output_file=out_path,
-    )
-    try:
-        result = run_xfoil_polar(req, timeout=30.0, max_retries=1)
-        return result.success and out_path.is_file()
-    except XfoilError as exc:
-        LOGGER.error("XFOIL smoke test failed: %s", exc)
-        return False
-    finally:
-        out_path.unlink(missing_ok=True)

@@ -12,7 +12,7 @@ Apply with:
 from __future__ import annotations
 
 import contextlib
-from typing import Generator
+from collections.abc import Generator
 
 import matplotlib as mpl
 

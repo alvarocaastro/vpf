@@ -37,7 +37,7 @@ def _ts() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _header(stage: int, title: str) -> List[str]:
+def _header(stage: int, title: str) -> list[str]:
     return [
         "=" * 70,
         f"STAGE {stage}: {title}",
@@ -47,7 +47,7 @@ def _header(stage: int, title: str) -> List[str]:
     ]
 
 
-def _footer() -> List[str]:
+def _footer() -> list[str]:
     return ["", "=" * 70]
 
 
